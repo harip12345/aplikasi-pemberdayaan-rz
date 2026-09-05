@@ -70,12 +70,25 @@ function packagedCodexExecutable() {
   };
   const selected = packages[`${process.platform}-${process.arch}`];
   if (!selected) return null;
+  const packageRoots = new Set<string>();
   try {
     const packageJson = moduleRequire.resolve(`${selected.packageName}/package.json`);
-    return existingFile(join(dirname(packageJson), "vendor", selected.target, "bin", process.platform === "win32" ? "codex.exe" : "codex"));
-  } catch {
-    return null;
+    packageRoots.add(dirname(packageJson));
+  } catch { /* Next.js may relocate dynamically resolved optional packages. */ }
+
+  packageRoots.add(join(process.cwd(), "node_modules", ...selected.packageName.split("/")));
+  packageRoots.add(join(process.cwd(), ".next", "server", "node_modules", ...selected.packageName.split("/")));
+  try {
+    const codexPackageRoot = dirname(moduleRequire.resolve("@openai/codex/package.json"));
+    const nodeModulesRoot = dirname(dirname(codexPackageRoot));
+    packageRoots.add(join(nodeModulesRoot, ...selected.packageName.split("/")));
+  } catch { /* The explicit cwd candidates above remain available. */ }
+
+  for (const packageRoot of packageRoots) {
+    const binary = existingFile(join(packageRoot, "vendor", selected.target, "bin", process.platform === "win32" ? "codex.exe" : "codex"));
+    if (binary) return binary;
   }
+  return null;
 }
 
 export function resolveCodexExecutable() {
@@ -92,6 +105,9 @@ export function resolveCodexExecutable() {
     if (standalone) return standalone;
     const desktop = localAppData ? newestCodexDesktopBinary(join(localAppData, "OpenAI", "Codex", "bin")) : null;
     if (desktop) return desktop;
+  }
+  if (process.env.VERCEL) {
+    throw new Error(`Binary Codex untuk ${process.platform}-${process.arch} tidak ikut dalam Vercel Function. Jangan isi CODEX_CLI_PATH; lakukan redeploy tanpa cache setelah dependency platform terpasang.`);
   }
   return "codex";
 }
