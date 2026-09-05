@@ -12,7 +12,9 @@ CODEX_REASONING_EFFORT=low
 CODEX_TURN_TIMEOUT_MS=120000
 VERCEL_SUPPORT_LARGE_FUNCTIONS=1
 NEXT_PUBLIC_APP_URL=https://domain-produksi.example
-BLOB_READ_WRITE_TOKEN=otomatis_dari_private_blob
+BLOB_STORE_ID=otomatis_dari_private_blob
+# Hanya store lama; tidak diperlukan jika koneksi memakai OIDC.
+BLOB_READ_WRITE_TOKEN=
 CODEX_AUTH_ENCRYPTION_KEY=base64_kunci_acak_32_byte
 CODEX_LOGIN_ADMIN_SECRET=secret_admin_yang_panjang_dan_acak
 ```
@@ -21,7 +23,7 @@ CODEX_LOGIN_ADMIN_SECRET=secret_admin_yang_panjang_dan_acak
 
 1. Buka **Vercel → Project → Storage**.
 2. Pilih **Create Database → Blob**, lalu pilih akses **Private**.
-3. Hubungkan store tersebut ke project. Vercel akan menambahkan `BLOB_READ_WRITE_TOKEN` secara otomatis.
+3. Hubungkan store tersebut ke project. Koneksi baru memakai OIDC dan menambahkan `BLOB_STORE_ID`; token OIDC berumur pendek disediakan otomatis saat function berjalan. `BLOB_READ_WRITE_TOKEN` hanya diperlukan untuk store lama yang belum memakai OIDC.
 4. Buat kunci enkripsi 32 byte:
 
    ```bash

@@ -23,10 +23,10 @@ let restoredEtag: string | null = null;
 let lastSavedHash: string | null = null;
 
 function hasBlobCredential() {
-  return Boolean(
-    process.env.BLOB_READ_WRITE_TOKEN?.trim()
-      || (process.env.VERCEL_OIDC_TOKEN?.trim() && process.env.BLOB_STORE_ID?.trim()),
-  );
+  if (process.env.BLOB_READ_WRITE_TOKEN?.trim()) return true;
+  const hasStore = Boolean(process.env.BLOB_STORE_ID?.trim());
+  const hasOidcRuntime = Boolean(process.env.VERCEL || process.env.VERCEL_OIDC_TOKEN?.trim());
+  return hasStore && hasOidcRuntime;
 }
 
 export function isCodexAuthPersistenceConfigured() {
