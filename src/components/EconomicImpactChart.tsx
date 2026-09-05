@@ -1,0 +1,10 @@
+"use client";
+
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { formatNumber } from "@/data/dashboard";
+
+type ImpactChartDatum = { name: string; target: number; capaian: number };
+
+export function EconomicImpactChart({ data, isLoading, color = "#D94F1E", title = "Target dan capaian dampak ekonomi" }: { data: ImpactChartDatum[]; isLoading: boolean; color?: string; title?: string }) {
+  return <div className="rounded-[24px] border border-slate-200 bg-slate-50/60 p-5"><div className="mb-5"><p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>Perbandingan indikator</p><h3 className="mt-1 text-lg font-bold text-ink">{title}</h3></div><div className="h-[310px]">{data.length > 0 ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 8, right: 8, left: 6, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#94A3B8" /><YAxis tickFormatter={(value) => formatNumber(Number(value))} tick={{ fontSize: 10 }} stroke="#94A3B8" /><Tooltip formatter={(value) => formatNumber(Number(value))} /><Bar dataKey="target" name="Target" fill="#CBD5E1" radius={[6, 6, 0, 0]} /><Bar dataKey="capaian" name="Capaian" fill={color} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-center"><div><p className="text-sm font-semibold text-slate-600">{isLoading ? "Memuat capaian…" : "Data belum tersedia"}</p><p className="mt-1 text-xs text-slate-400">Grafik ditampilkan setelah data terverifikasi.</p></div></div>}</div><div className="mt-2 flex items-center justify-center gap-5 text-[11px] text-slate-500"><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-slate-300" /> Target</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} /> Capaian</span></div></div>;
+}

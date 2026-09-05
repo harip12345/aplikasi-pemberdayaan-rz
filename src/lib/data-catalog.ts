@@ -1,0 +1,97 @@
+export type AiDataSourceId = "dashboard" | "participants" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact";
+
+export type DataSourceDefinition = {
+  id: AiDataSourceId;
+  label: string;
+  spreadsheetId: string;
+  gid: string;
+  environment: { spreadsheetId: string; gid: string };
+  parser: string;
+  grain: string;
+  refreshMode: "cached-google-sheet";
+};
+
+export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition> = {
+  dashboard: {
+    id: "dashboard",
+    label: "Target dan Capaian Dashboard",
+    spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs",
+    gid: "225836951",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_DASHBOARD_ID", gid: "GOOGLE_SHEETS_DASHBOARD_GID" },
+    parser: "dashboard-target-achievement-v1",
+    grain: "Satu indikator per bulan",
+    refreshMode: "cached-google-sheet",
+  },
+  participants: {
+    id: "participants",
+    label: "Data Peserta Program",
+    spreadsheetId: "1W0M9WD1Zk_r1F77vP1ccDivV5UQVrJbnUnursadoX8U",
+    gid: "953064145",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ID", gid: "GOOGLE_SHEETS_PP_GID" },
+    parser: "participant-row-v1",
+    grain: "Satu baris penyaluran per periode, wilayah, program, subprogram, dan asnaf",
+    refreshMode: "cached-google-sheet",
+  },
+  distribution: {
+    id: "distribution",
+    label: "Sebaran Desa Berdaya",
+    spreadsheetId: "12ZYUGPG1NP3y9Ve5z49CAcyPPmg34iElIfn5aFscv98",
+    gid: "1386051732",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_DISTRIBUTION_ID", gid: "GOOGLE_SHEETS_DISTRIBUTION_GID" },
+    parser: "empowered-village-row-v1",
+    grain: "Satu baris desa/program pada portofolio Desa Berdaya",
+    refreshMode: "cached-google-sheet",
+  },
+  munfik: {
+    id: "munfik",
+    label: "Data Detail Munfik",
+    spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs",
+    gid: "1144245068",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_MUNFIK_ID", gid: "GOOGLE_SHEETS_MUNFIK_GID" },
+    parser: "munfik-three-horizontal-blocks-v1",
+    grain: "Satu baris Munfik per bulan dan sumber data",
+    refreshMode: "cached-google-sheet",
+  },
+  muzzaki: {
+    id: "muzzaki", label: "Data Detail Muzaki", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "181388063",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_MUZZAKI_ID", gid: "GOOGLE_SHEETS_MUZZAKI_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris peserta Muzaki", refreshMode: "cached-google-sheet",
+  },
+  mualaf: {
+    id: "mualaf", label: "Data Detail Mualaf", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "527605744",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_MUALAF_ID", gid: "GOOGLE_SHEETS_MUALAF_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris peserta Mualaf dengan Nama PM terisi", refreshMode: "cached-google-sheet",
+  },
+  "pp-terbina": {
+    id: "pp-terbina", label: "Data Detail Peserta Program Terbina", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "1244942460",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_PP_TERBINA_ID", gid: "GOOGLE_SHEETS_PP_TERBINA_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris Peserta Program Terbina", refreshMode: "cached-google-sheet",
+  },
+  bummas: {
+    id: "bummas", label: "Data Detail BUMMas", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "1421837017",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_BUMMAS_ID", gid: "GOOGLE_SHEETS_BUMMAS_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris unit usaha dengan bidang usaha/program terisi", refreshMode: "cached-google-sheet",
+  },
+  "garis-kemiskinan": {
+    id: "garis-kemiskinan", label: "Data Peserta Keluar Garis Kemiskinan", spreadsheetId: "1ABjGkFo5tOuG7fbFhpec-vMdpOlAz9qeucWjXq90mMo", gid: "409940401",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_GK_ID", gid: "GOOGLE_SHEETS_GK_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris peserta keluar garis kemiskinan", refreshMode: "cached-google-sheet",
+  },
+  "garis-kemiskinan-recap": {
+    id: "garis-kemiskinan-recap", label: "Rekap Capaian Keluar Garis Kemiskinan", spreadsheetId: "1ABjGkFo5tOuG7fbFhpec-vMdpOlAz9qeucWjXq90mMo", gid: "218055831",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_GK_RECAP_ID", gid: "GOOGLE_SHEETS_GK_RECAP_GID" }, parser: "gk-multiyear-recap-v1", grain: "Satu baris rekap per bulan", refreshMode: "cached-google-sheet",
+  },
+  "vokasi-impact": {
+    id: "vokasi-impact", label: "Data Dampak Program Vokasi", spreadsheetId: "11w7dbnTtErIf0mhp9KSR5h5aC80FYV5tu11geVm951U", gid: "1561251771",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_VOKASI_IMPACT_ID", gid: "GOOGLE_SHEETS_VOKASI_IMPACT_GID" }, parser: "vocation-outcome-row-v1", grain: "Satu baris peserta vokasi dengan status hasil kerja/usaha", refreshMode: "cached-google-sheet",
+  },
+  "hafidz-impact": {
+    id: "hafidz-impact", label: "Data Dampak Peserta Program Hafidz", spreadsheetId: "11w7dbnTtErIf0mhp9KSR5h5aC80FYV5tu11geVm951U", gid: "183332782",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_HAFIDZ_IMPACT_ID", gid: "GOOGLE_SHEETS_HAFIDZ_IMPACT_GID" }, parser: "hafidz-achievement-row-v1", grain: "Satu baris peserta program Hafidz", refreshMode: "cached-google-sheet",
+  },
+};
+
+export function resolvedDataSource(id: AiDataSourceId) {
+  const source = AI_DATA_SOURCE_CATALOG[id];
+  return {
+    ...source,
+    spreadsheetId: process.env[source.environment.spreadsheetId] || source.spreadsheetId,
+    gid: process.env[source.environment.gid] || source.gid,
+    sheetUrl: `https://docs.google.com/spreadsheets/d/${process.env[source.environment.spreadsheetId] || source.spreadsheetId}/edit?gid=${process.env[source.environment.gid] || source.gid}`,
+  };
+}

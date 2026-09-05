@@ -1,0 +1,42 @@
+{
+  "name": "aplikasi-pemberdayaan-rz",
+  "version": "1.0.0",
+  "description": "Dashboard Laporan Pemberdayaan",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "telegram:webhook:set": "node scripts/configure-telegram-webhook.mjs set",
+    "telegram:webhook:info": "node scripts/configure-telegram-webhook.mjs info",
+    "telegram:webhook:delete": "node scripts/configure-telegram-webhook.mjs delete"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.24.0",
+    "next": "^15.5.20",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-leaflet": "^5.0.0",
+    "recharts": "^3.9.2",
+    "write-excel-file": "^4.1.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "autoprefixer": "^10.5.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.10",
+    "postcss": "^8.5.19",
+    "tailwindcss": "^3.4.19",
+    "typescript": "5.8.2"
+  }
+}

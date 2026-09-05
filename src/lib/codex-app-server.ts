@@ -1,0 +1,257 @@
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
+import { configuredCodexModel } from "@/lib/ai-providers";
+
+type JsonRecord = Record<string, unknown>;
+type DynamicTool = { type: "function"; name: string; description: string; inputSchema: JsonRecord };
+type ToolHandler = (name: string, args: JsonRecord) => Promise<unknown>;
+type TurnState = {
+  answer: string;
+  resolve: (answer: string) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+  onToolCall: ToolHandler;
+};
+type PendingRequest = {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+const REQUEST_TIMEOUT_MS = 30_000;
+const TURN_TIMEOUT_MS = Number(process.env.CODEX_TURN_TIMEOUT_MS || 120_000);
+const ACCOUNT_CACHE_MS = 10 * 60 * 1000;
+
+function record(value: unknown): JsonRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
+}
+
+function errorMessage(value: unknown, fallback: string) {
+  const item = record(value);
+  return typeof item?.message === "string" ? item.message : fallback;
+}
+
+function existingFile(path: string | undefined) {
+  if (!path) return null;
+  try { return existsSync(path) && statSync(path).isFile() ? path : null; } catch { return null; }
+}
+
+function newestCodexDesktopBinary(binRoot: string) {
+  try {
+    const candidates = readdirSync(binRoot, { withFileTypes: true }).flatMap((entry) => {
+      const path = entry.isDirectory() ? join(binRoot, entry.name, "codex.exe") : entry.name.toLowerCase() === "codex.exe" ? join(binRoot, entry.name) : "";
+      const file = existingFile(path);
+      if (!file) return [];
+      return [{ file, modifiedAt: statSync(file).mtimeMs }];
+    });
+    return candidates.sort((a, b) => b.modifiedAt - a.modifiedAt)[0]?.file || null;
+  } catch { return null; }
+}
+
+export function resolveCodexExecutable() {
+  const configured = process.env.CODEX_CLI_PATH?.trim();
+  if (configured && configured.toLowerCase() !== "codex") {
+    if (/[/\\]/.test(configured) && !existingFile(configured)) throw new Error(`CODEX_CLI_PATH tidak ditemukan: ${configured}`);
+    return configured;
+  }
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? join(process.env.USERPROFILE, "AppData", "Local") : "");
+    const standalone = existingFile(localAppData ? join(localAppData, "Programs", "OpenAI", "Codex", "bin", "codex.exe") : undefined);
+    if (standalone) return standalone;
+    const desktop = localAppData ? newestCodexDesktopBinary(join(localAppData, "OpenAI", "Codex", "bin")) : null;
+    if (desktop) return desktop;
+  }
+  return "codex";
+}
+
+class CodexAppServerClient {
+  private process: ChildProcessWithoutNullStreams | null = null;
+  private starting: Promise<void> | null = null;
+  private nextId = 1;
+  private pending = new Map<number, PendingRequest>();
+  private turns = new Map<string, TurnState>();
+  private stderr = "";
+  private accountCache: { value: { connected: boolean; authType: string | null; email: string | null; planType: string | null }; expiresAt: number } | null = null;
+
+  private send(message: JsonRecord) {
+    if (!this.process?.stdin.writable) throw new Error("Proses Codex App Server tidak aktif.");
+    this.process.stdin.write(`${JSON.stringify(message)}\n`);
+  }
+
+  private request(method: string, params: JsonRecord, timeoutMs = REQUEST_TIMEOUT_MS) {
+    const id = this.nextId++;
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Codex App Server tidak merespons permintaan ${method}.`));
+      }, timeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
+      this.send({ method, id, params });
+    });
+  }
+
+  private handleResponse(message: JsonRecord) {
+    if (typeof message.id !== "number") return false;
+    const pending = this.pending.get(message.id);
+    if (!pending) return false;
+    this.pending.delete(message.id);
+    clearTimeout(pending.timer);
+    if (message.error) pending.reject(new Error(errorMessage(message.error, "Permintaan Codex App Server gagal.")));
+    else pending.resolve(message.result);
+    return true;
+  }
+
+  private async handleToolRequest(message: JsonRecord) {
+    const params = record(message.params);
+    const threadId = typeof params?.threadId === "string" ? params.threadId : "";
+    const state = this.turns.get(threadId);
+    if (!state || typeof message.id !== "number" || typeof params?.tool !== "string") return;
+    try {
+      const args = record(params.arguments) || {};
+      const result = await state.onToolCall(params.tool, args);
+      this.send({ id: message.id, result: { contentItems: [{ type: "inputText", text: JSON.stringify(result) }], success: true } });
+    } catch (error) {
+      this.send({ id: message.id, result: { contentItems: [{ type: "inputText", text: error instanceof Error ? error.message : "Fungsi data gagal dijalankan." }], success: false } });
+    }
+  }
+
+  private handleNotification(message: JsonRecord) {
+    const params = record(message.params);
+    const threadId = typeof params?.threadId === "string" ? params.threadId : "";
+    const state = this.turns.get(threadId);
+    if (!state) return;
+
+    if (message.method === "item/completed") {
+      const item = record(params?.item);
+      if (item?.type === "agentMessage" && typeof item.text === "string" && item.text.trim()) state.answer = item.text.trim();
+      return;
+    }
+
+    if (message.method === "turn/completed") {
+      this.turns.delete(threadId);
+      clearTimeout(state.timer);
+      const turn = record(params?.turn);
+      if (turn?.status === "failed") state.reject(new Error(errorMessage(turn.error, "Codex gagal menyelesaikan jawaban.")));
+      else if (!state.answer) state.reject(new Error("Codex menyelesaikan proses tanpa jawaban teks."));
+      else state.resolve(state.answer);
+    }
+  }
+
+  private handleLine(line: string) {
+    let message: JsonRecord | null = null;
+    try { message = record(JSON.parse(line)); } catch { return; }
+    if (!message) return;
+    if (message.method === "item/tool/call") void this.handleToolRequest(message);
+    else if (this.handleResponse(message)) return;
+    else this.handleNotification(message);
+  }
+
+  private failAll(reason: Error) {
+    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(reason); }
+    for (const turn of this.turns.values()) { clearTimeout(turn.timer); turn.reject(reason); }
+    this.pending.clear();
+    this.turns.clear();
+  }
+
+  async ensureStarted() {
+    if (this.process && !this.process.killed) return;
+    if (this.starting) return this.starting;
+    this.starting = (async () => {
+      const executable = resolveCodexExecutable();
+      const child = spawn(executable, ["app-server", "--stdio"], {
+        cwd: process.cwd(),
+        env: process.env,
+        windowsHide: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      this.process = child;
+      this.stderr = "";
+      createInterface({ input: child.stdout }).on("line", (line) => this.handleLine(line));
+      child.stderr.on("data", (chunk: Buffer) => { this.stderr = `${this.stderr}${chunk.toString()}`.slice(-4000); });
+      child.once("error", (error) => {
+        this.process = null;
+        this.starting = null;
+        const hint = error.message.includes("ENOENT") ? " Tetapkan CODEX_CLI_PATH ke lokasi lengkap codex.exe lalu restart server." : "";
+        this.failAll(new Error(`Codex CLI tidak dapat dijalankan dari ${executable}: ${error.message}.${hint}`));
+      });
+      child.once("exit", (code) => {
+        const detail = this.stderr.trim();
+        this.process = null;
+        this.starting = null;
+        this.failAll(new Error(`Codex App Server berhenti (kode ${code ?? "tidak diketahui"}).${detail ? ` ${detail}` : ""}`));
+      });
+      await this.request("initialize", {
+        clientInfo: { name: "rz_empowerment_dashboard", title: "RZ Empowerment Dashboard", version: "1.0.0" },
+        capabilities: { experimentalApi: true },
+      });
+      this.send({ method: "initialized", params: {} });
+    })();
+    try { await this.starting; } finally { this.starting = null; }
+  }
+
+  async accountStatus() {
+    await this.ensureStarted();
+    if (this.accountCache && this.accountCache.expiresAt > Date.now()) return this.accountCache.value;
+    const result = record(await this.request("account/read", { refreshToken: false }));
+    const account = record(result?.account);
+    const value = {
+      connected: account?.type === "chatgpt",
+      authType: typeof account?.type === "string" ? account.type : null,
+      email: typeof account?.email === "string" ? account.email : null,
+      planType: typeof account?.planType === "string" ? account.planType : null,
+    };
+    this.accountCache = { value, expiresAt: Date.now() + ACCOUNT_CACHE_MS };
+    return value;
+  }
+
+  async runTurn(options: { instructions: string; conversation: string; tools: DynamicTool[]; onToolCall: ToolHandler }) {
+    await this.ensureStarted();
+    const status = await this.accountStatus();
+    if (!status.connected) throw new Error("Codex CLI belum login dengan akun ChatGPT. Jalankan `codex login`, lalu coba kembali.");
+
+    const model = configuredCodexModel();
+    const effort = process.env.CODEX_REASONING_EFFORT?.trim() || "low";
+    const threadResult = record(await this.request("thread/start", {
+      model,
+      cwd: process.cwd(),
+      approvalPolicy: "never",
+      sandbox: "read-only",
+      baseInstructions: "Anda adalah asisten analisis data. Jangan menjalankan shell, mengubah berkas, atau memakai alat selain fungsi data yang diberikan aplikasi.",
+      developerInstructions: options.instructions,
+      ephemeral: true,
+      dynamicTools: options.tools,
+    }));
+    const thread = record(threadResult?.thread);
+    const threadId = typeof thread?.id === "string" ? thread.id : "";
+    if (!threadId) throw new Error("Codex App Server tidak memberikan ID percakapan.");
+
+    const answer = new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.turns.delete(threadId);
+        reject(new Error("Waktu pemrosesan Codex habis. Coba pertanyaan yang lebih singkat."));
+      }, TURN_TIMEOUT_MS);
+      this.turns.set(threadId, { answer: "", resolve, reject, timer, onToolCall: options.onToolCall });
+    });
+
+    try {
+      await this.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: options.conversation }],
+        model,
+        ...(effort ? { effort } : {}),
+      });
+      return await answer;
+    } catch (error) {
+      const state = this.turns.get(threadId);
+      if (state) clearTimeout(state.timer);
+      this.turns.delete(threadId);
+      throw error;
+    }
+  }
+}
+
+const globalWithCodex = globalThis as typeof globalThis & { __rzCodexAppServerV2?: CodexAppServerClient };
+export const codexAppServer = globalWithCodex.__rzCodexAppServerV2 ?? new CodexAppServerClient();
+if (process.env.NODE_ENV !== "production") globalWithCodex.__rzCodexAppServerV2 = codexAppServer;
