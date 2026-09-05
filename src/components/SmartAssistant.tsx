@@ -14,6 +14,7 @@ const SUGGESTIONS = [
   "Urutkan 5 program dengan peserta terbesar.",
   "Berapa Munfik per sumber sampai Juli?",
   "Apakah data Dashboard dan detail sudah cocok?",
+  "Apa itu program Rumah Vokasi?",
 ];
 
 function messageId() {
@@ -38,6 +39,7 @@ export function SmartAssistant() {
   const [loginSecret, setLoginSecret] = useState("");
   const [loginCode, setLoginCode] = useState<LoginCode | null>(null);
   const [loginState, setLoginState] = useState<"idle" | "starting" | "waiting">("idle");
+  const [telegramUrl, setTelegramUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,6 +50,10 @@ export function SmartAssistant() {
     if (!isOpen || status) return;
     let active = true;
     void fetch("/api/assistant-data/warm", { method: "POST", cache: "no-store" }).catch(() => undefined);
+    void fetch("/api/telegram/webhook", { cache: "no-store" })
+      .then(async (response) => response.json() as Promise<{ botUrl?: string | null }>)
+      .then((payload) => { if (active && payload.botUrl) setTelegramUrl(payload.botUrl); })
+      .catch(() => undefined);
     void fetch("/api/assistant/status", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json() as ProviderStatus;
@@ -143,20 +149,21 @@ export function SmartAssistant() {
   const detailText = status?.planType ? `${providerText} · ${status.planType}` : providerText;
 
   return <>
-    {!isOpen && <button type="button" onClick={() => setIsOpen(true)} className="fixed bottom-6 right-5 z-[70] flex items-center gap-2 rounded-full bg-gradient-to-r from-[#D84315] to-[#F26A2E] px-5 py-3.5 font-semibold text-white shadow-xl shadow-orange-900/25 transition hover:-translate-y-0.5 hover:shadow-2xl" aria-label="Buka Asisten AI"><MessageCircle size={20} /><span className="hidden sm:inline">Asisten AI</span></button>}
+    {!isOpen && <button type="button" onClick={() => setIsOpen(true)} className="fixed bottom-6 right-5 z-[70] flex items-center gap-2 rounded-full bg-gradient-to-r from-[#D84315] to-[#F26A2E] px-5 py-3.5 font-semibold text-white shadow-xl shadow-orange-900/25 transition hover:-translate-y-0.5 hover:shadow-2xl" aria-label="Buka Asisten Data Program RZ"><MessageCircle size={20} /><span className="hidden sm:inline">Asisten Program RZ</span></button>}
 
-    {isOpen && <section className="fixed inset-x-3 bottom-3 top-20 z-[70] flex flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-[#F8FAFC] shadow-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[680px] sm:w-[430px]" aria-label="Asisten AI Data">
+    {isOpen && <section className="fixed inset-x-3 bottom-3 top-20 z-[70] flex flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-[#F8FAFC] shadow-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[680px] sm:w-[430px]" aria-label="Asisten Data Program RZ">
       <header className="flex items-center gap-3 bg-gradient-to-r from-[#172436] to-[#2D4057] px-4 py-3.5 text-white">
         <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F2662F]"><Bot size={21} /></span>
-        <div className="min-w-0 flex-1"><h2 className="font-bold">Asisten Data RZ</h2><p className="truncate text-[11px] text-white/65">{detailText}</p></div>
-        <button type="button" onClick={() => setIsOpen(false)} className="rounded-xl p-2 text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Tutup Asisten AI"><X size={19} /></button>
+        <div className="min-w-0 flex-1"><h2 className="font-bold">Asisten Data Program RZ</h2><p className="truncate text-[11px] text-white/65">{detailText}</p></div>
+        {telegramUrl && <a href={telegramUrl} target="_blank" rel="noreferrer" className="rounded-xl p-2 text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Buka bot Telegram" title="Buka bot Telegram"><Send size={18} /></a>}
+        <button type="button" onClick={() => setIsOpen(false)} className="rounded-xl p-2 text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Tutup Asisten Data Program RZ"><X size={19} /></button>
       </header>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 && <div className="space-y-4">
           <div className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2 text-[#D84315]"><Database size={17} /><p className="text-xs font-bold uppercase tracking-wider">Siap membaca data</p></div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Tanyakan capaian Dashboard, rincian Peserta Program, data Munfik, atau validitas antarsumber. Setiap angka akan dicari melalui fungsi data resmi.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Tanyakan capaian, rincian peserta, validitas data, serta definisi dan informasi program berdasarkan katalog resmi.</p>
             <div className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-xs leading-5 ${status?.connected === false ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>
               {status?.connected === false ? <AlertCircle size={15} className="mt-0.5 shrink-0" /> : status ? <CheckCircle2 size={15} className="mt-0.5 shrink-0" /> : <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin" />}
               <span>{status?.message || "Memeriksa koneksi model di server…"}</span>
@@ -174,6 +181,7 @@ export function SmartAssistant() {
               </div>}
               <p className="mt-2 text-[10px] leading-4 text-slate-400">Kredensial tidak dikirim ke browser dan disimpan terenkripsi pada Private Blob.</p>
             </div>}
+            {telegramUrl && <a href={telegramUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-[#229ED9] px-3 py-2.5 text-xs font-bold text-white transition hover:bg-[#168AC0]"><Send size={14} /> Akses melalui bot Telegram</a>}
           </div>
           <div className="grid gap-2">{SUGGESTIONS.map((suggestion) => <button type="button" key={suggestion} disabled={status?.connected === false} onClick={() => void sendMessage(suggestion)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-medium leading-5 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}</div>
         </div>}

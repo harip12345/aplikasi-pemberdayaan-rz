@@ -15,10 +15,11 @@ type TelegramState = {
   processedUpdates: Map<number, number>;
   rateLimits: Map<number, { count: number; resetsAt: number }>;
   queues: Map<number, Promise<void>>;
+  botProfile?: { username: string; url: string; expiresAt: number };
 };
 
 const globalTelegram = globalThis as typeof globalThis & { __rzTelegramState?: TelegramState };
-const state = globalTelegram.__rzTelegramState ?? {
+const state: TelegramState = globalTelegram.__rzTelegramState ?? {
   conversations: new Map(), processedUpdates: new Map(), rateLimits: new Map(), queues: new Map(),
 };
 globalTelegram.__rzTelegramState = state;
@@ -28,6 +29,21 @@ const UPDATE_TTL_MS = 60 * 60_000;
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 12;
 const MAX_TELEGRAM_TEXT = 3900;
+
+export async function getTelegramBotAccess() {
+  const configuredUsername = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "");
+  if (configuredUsername) return { username: configuredUsername, url: `https://t.me/${configuredUsername}` };
+  if (state.botProfile && state.botProfile.expiresAt > Date.now()) return { username: state.botProfile.username, url: state.botProfile.url };
+  const { token, apiUrl } = telegramConfig();
+  if (!token) return null;
+  const response = await fetch(`${apiUrl}/getMe`, { cache: "no-store" });
+  const result = await response.json().catch(() => null) as { ok?: boolean; result?: { username?: string }; description?: string } | null;
+  const username = result?.result?.username?.trim();
+  if (!response.ok || !result?.ok || !username) throw new Error(result?.description || "Username bot Telegram tidak dapat dibaca.");
+  const profile = { username, url: `https://t.me/${username}`, expiresAt: Date.now() + 24 * 60 * 60_000 };
+  state.botProfile = profile;
+  return { username: profile.username, url: profile.url };
+}
 
 function telegramConfig() {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -117,13 +133,16 @@ function sourceAppendix(sources: Array<{ label: string; url: string }>) {
   return unique.length ? `\n\nSumber data:\n${unique.map((source) => `• ${source.label}: ${source.url}`).join("\n")}` : "";
 }
 
-const HELP_TEXT = `Asisten Data Pemberdayaan RZ
+const HELP_TEXT = `Asisten Data Program RZ
 
-Kirim pertanyaan data seperti:
+Kirim pertanyaan data atau informasi program seperti:
 • Berapa total Peserta Program Januari–Juli 2026?
 • Lampirkan desa yang ada di Papua.
 • Kota dengan jumlah Muzaki terbanyak?
 • Berapa Munfik per sumber sampai Juli?
+• Apa itu program Rumah Vokasi?
+• Jelaskan konsep Desa Berdaya berdasarkan katalog program.
+• Program apa yang sesuai untuk pemberdayaan ekonomi mustahik?
 
 Perintah:
 /tanya <pertanyaan> — bertanya di grup atau chat pribadi
@@ -169,7 +188,7 @@ async function answerTelegramMessage(message: TelegramMessage) {
     const responseText = `${result.message}${sourceAppendix(result.sources)}`;
     await sendText(message.chat.id, responseText, message.message_id);
     state.conversations.set(message.chat.id, {
-      messages: [...input, { role: "assistant", content: result.message }].slice(-12),
+      messages: [...input, { role: "assistant" as const, content: result.message }].slice(-12),
       updatedAt: Date.now(),
     });
   } catch (error) {
@@ -187,4 +206,3 @@ export function enqueueTelegramUpdate(update: TelegramUpdate) {
   void task.finally(() => { if (state.queues.get(message.chat.id) === task) state.queues.delete(message.chat.id); });
   return task;
 }
-

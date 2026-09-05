@@ -1,12 +1,14 @@
 import { after, NextResponse } from "next/server";
-import { acceptTelegramUpdate, enqueueTelegramUpdate, type TelegramUpdate } from "@/lib/telegram-bot";
+import { acceptTelegramUpdate, enqueueTelegramUpdate, getTelegramBotAccess, type TelegramUpdate } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export function GET() {
-  return NextResponse.json({ service: "RZ Telegram Data Assistant", configured: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_WEBHOOK_SECRET) });
+export async function GET() {
+  const configured = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_WEBHOOK_SECRET);
+  const bot = configured ? await getTelegramBotAccess().catch(() => null) : null;
+  return NextResponse.json({ service: "Asisten Data Program RZ", configured, botUsername: bot?.username ?? null, botUrl: bot?.url ?? null });
 }
 
 export async function POST(request: Request) {
@@ -28,4 +30,3 @@ export async function POST(request: Request) {
   after(async () => { await enqueueTelegramUpdate(update); });
   return NextResponse.json({ ok: true });
 }
-
