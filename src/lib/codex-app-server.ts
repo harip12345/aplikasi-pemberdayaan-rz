@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { configuredCodexModel } from "@/lib/ai-providers";
+import { isCodexAuthPersistenceConfigured, persistCodexAuth, preparePersistentCodexHome, syncPersistentCodexAuth } from "@/lib/codex-auth-storage";
 
 type JsonRecord = Record<string, unknown>;
 type DynamicTool = { type: "function"; name: string; description: string; inputSchema: JsonRecord };
@@ -17,6 +18,12 @@ type TurnState = {
 };
 type PendingRequest = {
   resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+type LoginResult = { success: boolean; error: string | null };
+type LoginWaiter = {
+  resolve: (value: LoginResult) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -95,7 +102,11 @@ class CodexAppServerClient {
   private nextId = 1;
   private pending = new Map<number, PendingRequest>();
   private turns = new Map<string, TurnState>();
+  private logins = new Map<string, LoginWaiter>();
+  private completedLogins = new Map<string, LoginResult>();
   private stderr = "";
+  private lastAuthSyncAt = 0;
+  private authRestartNeeded = false;
   private accountCache: { value: { connected: boolean; authType: string | null; email: string | null; planType: string | null }; expiresAt: number } | null = null;
 
   private send(message: JsonRecord) {
@@ -142,6 +153,26 @@ class CodexAppServerClient {
 
   private handleNotification(message: JsonRecord) {
     const params = record(message.params);
+    if (message.method === "account/updated") {
+      this.accountCache = null;
+      return;
+    }
+    if (message.method === "account/login/completed") {
+      const loginId = typeof params?.loginId === "string" ? params.loginId : "";
+      const waiter = this.logins.get(loginId);
+      const result = {
+        success: params?.success === true,
+        error: typeof params?.error === "string" ? params.error : null,
+      };
+      if (!waiter) {
+        if (loginId) this.completedLogins.set(loginId, result);
+        return;
+      }
+      this.logins.delete(loginId);
+      clearTimeout(waiter.timer);
+      waiter.resolve(result);
+      return;
+    }
     const threadId = typeof params?.threadId === "string" ? params.threadId : "";
     const state = this.turns.get(threadId);
     if (!state) return;
@@ -174,8 +205,30 @@ class CodexAppServerClient {
   private failAll(reason: Error) {
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(reason); }
     for (const turn of this.turns.values()) { clearTimeout(turn.timer); turn.reject(reason); }
+    for (const login of this.logins.values()) { clearTimeout(login.timer); login.reject(reason); }
     this.pending.clear();
     this.turns.clear();
+    this.logins.clear();
+    this.completedLogins.clear();
+  }
+
+  private async syncPersistentAuth() {
+    if (!isCodexAuthPersistenceConfigured()) return;
+    if (Date.now() - this.lastAuthSyncAt >= 2_000) {
+      this.lastAuthSyncAt = Date.now();
+      if (await syncPersistentCodexAuth()) this.authRestartNeeded = true;
+    }
+    if (!this.authRestartNeeded || !this.process || this.turns.size > 0 || this.pending.size > 0) return;
+    const child = this.process;
+    this.process = null;
+    this.starting = null;
+    this.authRestartNeeded = false;
+    child.kill();
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 1_000);
+      child.once("exit", () => { clearTimeout(timer); resolve(); });
+    });
+    this.accountCache = null;
   }
 
   async ensureStarted() {
@@ -183,9 +236,10 @@ class CodexAppServerClient {
     if (this.starting) return this.starting;
     this.starting = (async () => {
       const executable = resolveCodexExecutable();
+      const persistentHome = await preparePersistentCodexHome();
       const child = spawn(executable, ["app-server", "--stdio"], {
         cwd: process.cwd(),
-        env: process.env,
+        env: { ...process.env, ...(persistentHome ? { CODEX_HOME: persistentHome } : {}) },
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -194,16 +248,20 @@ class CodexAppServerClient {
       createInterface({ input: child.stdout }).on("line", (line) => this.handleLine(line));
       child.stderr.on("data", (chunk: Buffer) => { this.stderr = `${this.stderr}${chunk.toString()}`.slice(-4000); });
       child.once("error", (error) => {
-        this.process = null;
-        this.starting = null;
-        const hint = error.message.includes("ENOENT") ? " Pastikan dependency @openai/codex terpasang atau tetapkan CODEX_CLI_PATH." : "";
-        this.failAll(new Error(`Codex CLI tidak dapat dijalankan dari ${executable}: ${error.message}.${hint}`));
+        if (this.process === child) {
+          this.process = null;
+          this.starting = null;
+          const hint = error.message.includes("ENOENT") ? " Pastikan dependency @openai/codex terpasang atau tetapkan CODEX_CLI_PATH." : "";
+          this.failAll(new Error(`Codex CLI tidak dapat dijalankan dari ${executable}: ${error.message}.${hint}`));
+        }
       });
       child.once("exit", (code) => {
         const detail = this.stderr.trim();
-        this.process = null;
-        this.starting = null;
-        this.failAll(new Error(`Codex App Server berhenti (kode ${code ?? "tidak diketahui"}).${detail ? ` ${detail}` : ""}`));
+        if (this.process === child) {
+          this.process = null;
+          this.starting = null;
+          this.failAll(new Error(`Codex App Server berhenti (kode ${code ?? "tidak diketahui"}).${detail ? ` ${detail}` : ""}`));
+        }
       });
       await this.request("initialize", {
         clientInfo: { name: "rz_empowerment_dashboard", title: "RZ Empowerment Dashboard", version: "1.0.0" },
@@ -215,6 +273,7 @@ class CodexAppServerClient {
   }
 
   async accountStatus() {
+    await this.syncPersistentAuth();
     await this.ensureStarted();
     if (this.accountCache && this.accountCache.expiresAt > Date.now()) return this.accountCache.value;
     const result = record(await this.request("account/read", { refreshToken: false }));
@@ -226,7 +285,38 @@ class CodexAppServerClient {
       planType: typeof account?.planType === "string" ? account.planType : null,
     };
     this.accountCache = { value, expiresAt: Date.now() + ACCOUNT_CACHE_MS };
+    await persistCodexAuth().catch((error) => console.error("Gagal menyinkronkan autentikasi Codex:", error instanceof Error ? error.message : error));
     return value;
+  }
+
+  async startDeviceLogin() {
+    await this.syncPersistentAuth();
+    await this.ensureStarted();
+    this.accountCache = null;
+    const result = record(await this.request("account/login/start", { type: "chatgptDeviceCode" }));
+    const loginId = typeof result?.loginId === "string" ? result.loginId : "";
+    const verificationUrl = typeof result?.verificationUrl === "string" ? result.verificationUrl : "";
+    const userCode = typeof result?.userCode === "string" ? result.userCode : "";
+    if (!loginId || !verificationUrl || !userCode) throw new Error("Codex tidak memberikan kode login yang lengkap.");
+    return { loginId, verificationUrl, userCode };
+  }
+
+  async waitForDeviceLogin(loginId: string, timeoutMs = 240_000) {
+    const earlyResult = this.completedLogins.get(loginId);
+    if (earlyResult) this.completedLogins.delete(loginId);
+    const completed = earlyResult || await new Promise<LoginResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.logins.delete(loginId);
+        reject(new Error("Waktu login habis. Mulai ulang proses login dan masukkan kode baru."));
+      }, timeoutMs);
+      this.logins.set(loginId, { resolve, reject, timer });
+    });
+    if (!completed.success) throw new Error(completed.error || "Login ChatGPT tidak berhasil.");
+    this.accountCache = null;
+    const status = await this.accountStatus();
+    if (!status.connected) throw new Error("Login selesai, tetapi akun ChatGPT belum terbaca oleh Codex.");
+    await persistCodexAuth({ force: true });
+    return status;
   }
 
   async runTurn(options: { instructions: string; conversation: string; tools: DynamicTool[]; onToolCall: ToolHandler }) {
@@ -270,7 +360,9 @@ class CodexAppServerClient {
         model,
         ...(effort ? { effort } : {}),
       });
-      return await answer;
+      const result = await answer;
+      await persistCodexAuth().catch((error) => console.error("Gagal menyinkronkan autentikasi Codex:", error instanceof Error ? error.message : error));
+      return result;
     } catch (error) {
       const state = this.turns.get(threadId);
       if (state) clearTimeout(state.timer);

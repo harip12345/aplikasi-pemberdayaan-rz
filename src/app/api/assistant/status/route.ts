@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { codexAppServer } from "@/lib/codex-app-server";
 import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHttpAiProvider } from "@/lib/ai-providers";
+import { isCodexAuthPersistenceConfigured } from "@/lib/codex-auth-storage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,16 +12,20 @@ export async function GET() {
     const provider = configuredAiProvider();
     if (provider === "codex") {
       const account = await codexAppServer.accountStatus();
+      const loginAvailable = !process.env.CODEX_ACCESS_TOKEN?.trim() && isCodexAuthPersistenceConfigured() && Boolean(process.env.CODEX_LOGIN_ADMIN_SECRET?.trim());
       return NextResponse.json({
         provider,
         label: aiProviderLabel(provider),
         model: configuredCodexModel(),
         connected: account.connected,
+        loginAvailable,
         planType: account.planType,
         message: account.connected
           ? "Terhubung melalui workspace ChatGPT."
-          : process.env.NODE_ENV === "production"
-            ? "CODEX_ACCESS_TOKEN belum valid atau Codex CLI tidak dapat dijalankan."
+          : loginAvailable
+            ? "Codex belum terhubung. Gunakan login ChatGPT Business di bawah."
+            : process.env.NODE_ENV === "production"
+            ? "Penyimpanan login Codex belum dikonfigurasi."
             : "Jalankan codex login atau isi CODEX_ACCESS_TOKEN pada server.",
       }, { headers: { "Cache-Control": "no-store" } });
     }

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bot, CheckCircle2, Database, ExternalLink, Loader2, MessageCircle, RotateCcw, Send, X } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, Copy, Database, ExternalLink, Loader2, LogIn, MessageCircle, RotateCcw, Send, X } from "lucide-react";
 
 type SourceLink = { label: string; url: string; updatedAt: string };
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; sources?: SourceLink[]; usedTools?: string[] };
-type ProviderStatus = { label?: string; model?: string; connected: boolean; planType?: string | null; message?: string };
+type ProviderStatus = { label?: string; model?: string; connected: boolean; loginAvailable?: boolean; planType?: string | null; message?: string };
+type LoginCode = { verificationUrl: string; userCode: string };
+type LoginEvent = { type: "code"; verificationUrl: string; userCode: string } | { type: "complete"; connected: true; planType?: string | null } | { type: "error"; message: string };
 
 const SUGGESTIONS = [
   "Berapa total Peserta Program Januari–Juli 2026?",
@@ -33,6 +35,9 @@ export function SmartAssistant() {
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loginSecret, setLoginSecret] = useState("");
+  const [loginCode, setLoginCode] = useState<LoginCode | null>(null);
+  const [loginState, setLoginState] = useState<"idle" | "starting" | "waiting">("idle");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,6 +63,60 @@ export function SmartAssistant() {
       });
     return () => { active = false; };
   }, [isOpen, status]);
+
+  const connectChatGPT = async () => {
+    if (!loginSecret.trim() || loginState !== "idle") return;
+    setError(null); setLoginCode(null); setLoginState("starting");
+    try {
+      const response = await fetch("/api/assistant/login", {
+        method: "POST",
+        headers: { "x-rz-login-secret": loginSecret.trim() },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { message?: string } | null;
+        throw new Error(payload?.message || "Login ChatGPT tidak dapat dimulai.");
+      }
+      if (!response.body) throw new Error("Server tidak mengirim alur login.");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completed = false;
+      const processLine = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as LoginEvent;
+        if (event.type === "code") {
+          setLoginCode({ verificationUrl: event.verificationUrl, userCode: event.userCode });
+          setLoginState("waiting");
+        } else if (event.type === "complete") {
+          completed = true;
+        } else if (event.type === "error") {
+          throw new Error(event.message);
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) processLine(line);
+        if (done) break;
+      }
+      if (buffer.trim()) processLine(buffer);
+      if (!completed) throw new Error("Proses login berakhir sebelum akun terhubung.");
+
+      const statusResponse = await fetch("/api/assistant/status", { cache: "no-store" });
+      const nextStatus = await statusResponse.json() as ProviderStatus;
+      if (!statusResponse.ok || !nextStatus.connected) throw new Error(nextStatus.message || "Akun belum terbaca setelah login.");
+      setStatus(nextStatus); setLoginSecret(""); setLoginCode(null);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "Login ChatGPT tidak berhasil.");
+    } finally {
+      setLoginState("idle");
+    }
+  };
 
   const sendMessage = async (suggested?: string) => {
     const content = (suggested ?? input).trim();
@@ -102,6 +161,19 @@ export function SmartAssistant() {
               {status?.connected === false ? <AlertCircle size={15} className="mt-0.5 shrink-0" /> : status ? <CheckCircle2 size={15} className="mt-0.5 shrink-0" /> : <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin" />}
               <span>{status?.message || "Memeriksa koneksi model di server…"}</span>
             </div>
+            {status?.connected === false && status.loginAvailable && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-2 text-slate-700"><LogIn size={15} /><p className="text-xs font-bold">Hubungkan ChatGPT Business</p></div>
+              {!loginCode ? <div className="mt-2 flex gap-2">
+                <input type="password" value={loginSecret} onChange={(event) => setLoginSecret(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connectChatGPT(); }} placeholder="Secret admin login" autoComplete="off" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-orange-300" />
+                <button type="button" onClick={() => void connectChatGPT()} disabled={!loginSecret.trim() || loginState !== "idle"} className="rounded-xl bg-[#D84315] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{loginState === "starting" ? <Loader2 size={15} className="animate-spin" /> : "Login"}</button>
+              </div> : <div className="mt-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Kode sekali pakai</p>
+                <div className="mt-1 flex items-center justify-center gap-2"><strong className="font-mono text-lg tracking-wider text-slate-900">{loginCode.userCode}</strong><button type="button" onClick={() => void navigator.clipboard.writeText(loginCode.userCode)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white" aria-label="Salin kode"><Copy size={14} /></button></div>
+                <a href={loginCode.verificationUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#172436] px-3 py-2 text-xs font-semibold text-white"><ExternalLink size={12} /> Buka halaman login</a>
+                <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-500"><Loader2 size={11} className="animate-spin" /> Menunggu konfirmasi login…</p>
+              </div>}
+              <p className="mt-2 text-[10px] leading-4 text-slate-400">Kredensial tidak dikirim ke browser dan disimpan terenkripsi pada Private Blob.</p>
+            </div>}
           </div>
           <div className="grid gap-2">{SUGGESTIONS.map((suggestion) => <button type="button" key={suggestion} disabled={status?.connected === false} onClick={() => void sendMessage(suggestion)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-medium leading-5 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}</div>
         </div>}
