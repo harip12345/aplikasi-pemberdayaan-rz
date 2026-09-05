@@ -20,5 +20,4 @@ Periksa status dengan `npm run telegram:webhook:info` dan hapus webhook dengan `
 
 Bot dapat digunakan siapa pun melalui chat pribadi. Dalam grup, gunakan `/tanya <pertanyaan>`. Riwayat singkat disimpan selama 30 menit untuk memahami pertanyaan lanjutan. Perintah `/reset` menghapus konteks tersebut.
 
-Jika aplikasi dipasang di layanan cloud yang tidak memiliki Codex CLI dan login ChatGPT, gunakan provider API melalui environment (`AI_PROVIDER=groq`, `openrouter`, `9router`, atau `custom`). Provider Codex Subscription hanya dapat berjalan pada server yang memiliki executable Codex CLI dan sesi login aktif.
-
+Untuk deployment Vercel dengan workspace ChatGPT Business/Enterprise, gunakan `AI_PROVIDER=codex` dan simpan access token ber-scope Codex sebagai `CODEX_ACCESS_TOKEN`. Paket resmi Codex CLI sudah menjadi dependency produksi dan App Server memakai token tersebut secara non-interaktif. Jangan pernah memasukkan token ke source code, repository, atau log.

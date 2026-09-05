@@ -3,6 +3,7 @@ import { runDataAssistant, type AssistantInputMessage } from "@/lib/ai-assistant
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 20;

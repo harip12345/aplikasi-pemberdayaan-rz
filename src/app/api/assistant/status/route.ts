@@ -4,6 +4,7 @@ import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHtt
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function GET() {
   try {
@@ -16,7 +17,11 @@ export async function GET() {
         model: configuredCodexModel(),
         connected: account.connected,
         planType: account.planType,
-        message: account.connected ? "Terhubung melalui langganan ChatGPT." : "Jalankan codex login pada komputer server.",
+        message: account.connected
+          ? "Terhubung melalui workspace ChatGPT."
+          : process.env.NODE_ENV === "production"
+            ? "CODEX_ACCESS_TOKEN belum valid atau Codex CLI tidak dapat dijalankan."
+            : "Jalankan codex login atau isi CODEX_ACCESS_TOKEN pada server.",
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const resolved = resolveHttpAiProvider();

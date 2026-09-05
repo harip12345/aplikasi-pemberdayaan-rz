@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { configuredCodexModel } from "@/lib/ai-providers";
 
@@ -23,6 +24,7 @@ type PendingRequest = {
 const REQUEST_TIMEOUT_MS = 30_000;
 const TURN_TIMEOUT_MS = Number(process.env.CODEX_TURN_TIMEOUT_MS || 120_000);
 const ACCOUNT_CACHE_MS = 10 * 60 * 1000;
+const moduleRequire = createRequire(import.meta.url);
 
 function record(value: unknown): JsonRecord | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
@@ -50,12 +52,33 @@ function newestCodexDesktopBinary(binRoot: string) {
   } catch { return null; }
 }
 
+function packagedCodexExecutable() {
+  const packages: Record<string, { packageName: string; target: string }> = {
+    "linux-x64": { packageName: "@openai/codex-linux-x64", target: "x86_64-unknown-linux-musl" },
+    "linux-arm64": { packageName: "@openai/codex-linux-arm64", target: "aarch64-unknown-linux-musl" },
+    "win32-x64": { packageName: "@openai/codex-win32-x64", target: "x86_64-pc-windows-msvc" },
+    "win32-arm64": { packageName: "@openai/codex-win32-arm64", target: "aarch64-pc-windows-msvc" },
+    "darwin-x64": { packageName: "@openai/codex-darwin-x64", target: "x86_64-apple-darwin" },
+    "darwin-arm64": { packageName: "@openai/codex-darwin-arm64", target: "aarch64-apple-darwin" },
+  };
+  const selected = packages[`${process.platform}-${process.arch}`];
+  if (!selected) return null;
+  try {
+    const packageJson = moduleRequire.resolve(`${selected.packageName}/package.json`);
+    return existingFile(join(dirname(packageJson), "vendor", selected.target, "bin", process.platform === "win32" ? "codex.exe" : "codex"));
+  } catch {
+    return null;
+  }
+}
+
 export function resolveCodexExecutable() {
   const configured = process.env.CODEX_CLI_PATH?.trim();
   if (configured && configured.toLowerCase() !== "codex") {
     if (/[/\\]/.test(configured) && !existingFile(configured)) throw new Error(`CODEX_CLI_PATH tidak ditemukan: ${configured}`);
     return configured;
   }
+  const packaged = packagedCodexExecutable();
+  if (packaged) return packaged;
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? join(process.env.USERPROFILE, "AppData", "Local") : "");
     const standalone = existingFile(localAppData ? join(localAppData, "Programs", "OpenAI", "Codex", "bin", "codex.exe") : undefined);
@@ -173,7 +196,7 @@ class CodexAppServerClient {
       child.once("error", (error) => {
         this.process = null;
         this.starting = null;
-        const hint = error.message.includes("ENOENT") ? " Tetapkan CODEX_CLI_PATH ke lokasi lengkap codex.exe lalu restart server." : "";
+        const hint = error.message.includes("ENOENT") ? " Pastikan dependency @openai/codex terpasang atau tetapkan CODEX_CLI_PATH." : "";
         this.failAll(new Error(`Codex CLI tidak dapat dijalankan dari ${executable}: ${error.message}.${hint}`));
       });
       child.once("exit", (code) => {
@@ -209,7 +232,12 @@ class CodexAppServerClient {
   async runTurn(options: { instructions: string; conversation: string; tools: DynamicTool[]; onToolCall: ToolHandler }) {
     await this.ensureStarted();
     const status = await this.accountStatus();
-    if (!status.connected) throw new Error("Codex CLI belum login dengan akun ChatGPT. Jalankan `codex login`, lalu coba kembali.");
+    if (!status.connected) {
+      const hint = process.env.NODE_ENV === "production"
+        ? "Pastikan CODEX_ACCESS_TOKEN dari workspace ChatGPT Business tersedia."
+        : "Jalankan `codex login` atau isi CODEX_ACCESS_TOKEN.";
+      throw new Error(`Codex CLI belum terhubung dengan akun ChatGPT. ${hint}`);
+    }
 
     const model = configuredCodexModel();
     const effort = process.env.CODEX_REASONING_EFFORT?.trim() || "low";
