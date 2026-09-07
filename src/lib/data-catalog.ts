@@ -1,4 +1,4 @@
-export type AiDataSourceId = "dashboard" | "participants" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact";
+export type AiDataSourceId = "dashboard" | "participants" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact";
 
 export type DataSourceDefinition = {
   id: AiDataSourceId;
@@ -83,6 +83,10 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
   "hafidz-impact": {
     id: "hafidz-impact", label: "Data Dampak Peserta Program Hafidz", spreadsheetId: "11w7dbnTtErIf0mhp9KSR5h5aC80FYV5tu11geVm951U", gid: "183332782",
     environment: { spreadsheetId: "GOOGLE_SHEETS_HAFIDZ_IMPACT_ID", gid: "GOOGLE_SHEETS_HAFIDZ_IMPACT_GID" }, parser: "hafidz-achievement-row-v1", grain: "Satu baris peserta program Hafidz", refreshMode: "cached-google-sheet",
+  },
+  "environment-impact": {
+    id: "environment-impact", label: "Data Dampak Program Lingkungan", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "1424522729",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_ENVIRONMENT_IMPACT_ID", gid: "GOOGLE_SHEETS_ENVIRONMENT_IMPACT_GID" }, parser: "environment-impact-columns-u-v-v1", grain: "Satu baris lokasi Bank Sampah atau dampak Desa Lestari", refreshMode: "cached-google-sheet",
   },
 };
 
