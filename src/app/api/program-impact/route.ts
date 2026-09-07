@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const data = await getProgramImpactData(isForcedDataRefresh(request));
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Gagal membaca data dampak pendidikan dan dakwah:", error);
+    console.error("Gagal membaca data dampak program:", error);
     return NextResponse.json({ message: error instanceof Error ? error.message : "Data dampak belum dapat dimuat." }, { status: 502 });
   }
 }

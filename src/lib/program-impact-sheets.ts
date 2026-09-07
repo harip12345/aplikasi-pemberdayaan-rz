@@ -3,12 +3,25 @@ import { resolvedDataSource, type AiDataSourceId } from "@/lib/data-catalog";
 import { fetchGoogleSheetCsv } from "@/lib/google-sheets-fetch";
 import { getServerCachedData } from "@/lib/server-data-cache";
 
+export type ProgramImpactLocationDetail = {
+  id: string;
+  village: string;
+  district: string;
+  regency: string;
+  province: string;
+  branch: string;
+  status: string;
+  villageType: string;
+  volunteer: string;
+};
+
 export type ProgramImpactIndicator = {
-  id: "terserap-kerja" | "wirausaha" | "hafiz" | "pp-terbina";
+  id: "terserap-kerja" | "wirausaha" | "hafiz" | "masjid" | "pp-terbina";
   achievement: number;
   sourceLabel: string;
   sourceUrl: string;
   dataThrough: string;
+  details?: ProgramImpactLocationDetail[];
 };
 
 export type ProgramImpactData = {
@@ -17,6 +30,7 @@ export type ProgramImpactData = {
   quality: {
     vocation: { rowsRead: number; rowsAccepted: number; rowsRejected: number };
     hafidz: { rowsRead: number; rowsAccepted: number; rowsRejected: number };
+    masjidBerdaya: { rowsRead: number; rowsMatched: number; isValid: boolean };
     ppTerbina: { rowsRead: number; rowsAccepted: number; rowsRejected: number; isValid: boolean };
   };
   updatedAt: string;
@@ -85,10 +99,54 @@ async function loadHafidzImpact() {
   return { total: validRows.length, rowsRead: rows.length, rowsAccepted: validRows.length, rowsRejected: rows.length - validRows.length, source };
 }
 
+async function loadMasjidBerdayaImpact() {
+  const { source, csvUrl } = sourceCsvUrl("distribution");
+  const table = parseCsv((await fetchGoogleSheetCsv(csvUrl)).replace(/^\uFEFF/, ""));
+  const header = table[0]?.map(normalized) ?? [];
+  const column = (name: string) => header.findIndex((value) => value === normalized(name));
+  const masjidColumn = column("Masjid Berdaya");
+  const villageColumn = column("Desa");
+  if (masjidColumn < 0 || villageColumn < 0) throw new Error("Kolom Desa atau Masjid Berdaya tidak ditemukan pada sumber Desa Berdaya.");
+
+  const idColumn = Math.max(column("ID_Desa_"), column("ID_Desa"));
+  const districtColumn = column("Kecamatan");
+  const regencyColumn = column("Kota/Kab");
+  const provinceColumn = column("Provinsi");
+  const branchColumn = column("Cabang");
+  const statusColumn = column("Ket Desber");
+  const typeColumn = column("Status Desber");
+  const volunteerColumn = column("Nama RI");
+  const rows = table.slice(1).filter((row) => row.some(Boolean));
+  const valueAt = (row: string[], index: number, fallback = "-") => index >= 0 && row[index]?.trim() ? row[index].trim() : fallback;
+  const details = rows
+    .filter((row) => normalized(row[masjidColumn] ?? "") === "masjid berdaya")
+    .map((row, index): ProgramImpactLocationDetail => ({
+      id: valueAt(row, idColumn, `masjid-berdaya-${index + 1}`),
+      village: valueAt(row, villageColumn, "Desa belum terisi"),
+      district: valueAt(row, districtColumn),
+      regency: valueAt(row, regencyColumn),
+      province: valueAt(row, provinceColumn),
+      branch: valueAt(row, branchColumn),
+      status: valueAt(row, statusColumn, "Tidak diketahui"),
+      villageType: valueAt(row, typeColumn, "Tidak diketahui"),
+      volunteer: valueAt(row, volunteerColumn, "Belum tersedia"),
+    }))
+    .sort((a, b) => a.province.localeCompare(b.province, "id") || a.regency.localeCompare(b.regency, "id") || a.village.localeCompare(b.village, "id"));
+
+  return {
+    total: details.length,
+    details,
+    rowsRead: rows.length,
+    source,
+    dataThrough: new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric" }).format(new Date()),
+  };
+}
+
 export async function getProgramImpactData(forceRefresh = false): Promise<ProgramImpactData> {
-  const [vocation, hafidz, ppTerbina] = await Promise.all([
+  const [vocation, hafidz, masjidBerdaya, ppTerbina] = await Promise.all([
     getServerCachedData("impact-vocation-v1", loadVocationImpact, forceRefresh),
     getServerCachedData("impact-hafidz-v1", loadHafidzImpact, forceRefresh),
+    getServerCachedData("impact-masjid-berdaya-v1", loadMasjidBerdayaImpact, forceRefresh),
     queryDetailData({ source: "details", metricId: "pp-terbina" }, forceRefresh),
   ]);
   const ppPeriod = ppTerbina.period ? `${ppTerbina.period.startMonth}–${ppTerbina.period.endMonth}` : "Data terbaru";
@@ -98,11 +156,13 @@ export async function getProgramImpactData(forceRefresh = false): Promise<Progra
       { id: "terserap-kerja", achievement: vocation.employed, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year) },
       { id: "wirausaha", achievement: vocation.entrepreneurs, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year) },
       { id: "hafiz", achievement: hafidz.total, sourceLabel: hafidz.source.label, sourceUrl: hafidz.source.sheetUrl, dataThrough: String(vocation.year) },
+      { id: "masjid", achievement: masjidBerdaya.total, sourceLabel: masjidBerdaya.source.label, sourceUrl: masjidBerdaya.source.sheetUrl, dataThrough: masjidBerdaya.dataThrough, details: masjidBerdaya.details },
       { id: "pp-terbina", achievement: ppTerbina.total, sourceLabel: ppTerbina.provenance.sourceLabel, sourceUrl: ppTerbina.provenance.sheetUrl, dataThrough: ppPeriod },
     ],
     quality: {
       vocation: { rowsRead: vocation.rowsRead, rowsAccepted: vocation.rowsAccepted, rowsRejected: vocation.rowsRejected },
       hafidz: { rowsRead: hafidz.rowsRead, rowsAccepted: hafidz.rowsAccepted, rowsRejected: hafidz.rowsRejected },
+      masjidBerdaya: { rowsRead: masjidBerdaya.rowsRead, rowsMatched: masjidBerdaya.total, isValid: masjidBerdaya.total > 0 },
       ppTerbina: { rowsRead: ppTerbina.quality.rowsRead, rowsAccepted: ppTerbina.quality.rowsAccepted, rowsRejected: ppTerbina.quality.rowsRejected, isValid: ppTerbina.quality.isValid },
     },
     updatedAt: new Date().toISOString(),
