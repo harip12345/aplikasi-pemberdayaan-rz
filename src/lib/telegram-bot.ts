@@ -1,4 +1,6 @@
 import { runDataAssistant, type AssistantInputMessage } from "@/lib/ai-assistant";
+import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHttpAiProvider } from "@/lib/ai-providers";
+import { codexAppServer } from "@/lib/codex-app-server";
 
 type TelegramChat = { id: number; type: "private" | "group" | "supergroup" | "channel" | string };
 type TelegramMessage = {
@@ -146,8 +148,33 @@ Kirim pertanyaan data atau informasi program seperti:
 
 Perintah:
 /tanya <pertanyaan> — bertanya di grup atau chat pribadi
+/status — cek koneksi model AI dari server Telegram
 /reset — hapus konteks percakapan
 /help — tampilkan panduan`;
+
+async function assistantStatusText() {
+  const provider = configuredAiProvider();
+  if (provider === "codex") {
+    const account = await codexAppServer.accountStatus();
+    if (!account.connected) {
+      return "Model AI belum terhubung ke akun ChatGPT pada server. Login admin perlu dilakukan satu kali; setelah tersimpan, bot dapat berjalan tanpa membuka web.";
+    }
+    return `Model AI siap digunakan.\nProvider: ${aiProviderLabel(provider)}\nModel: ${configuredCodexModel()}\nBot dapat menjawab langsung tanpa membuka aplikasi web.`;
+  }
+  const resolved = resolveHttpAiProvider();
+  return `Model AI siap digunakan.\nProvider: ${resolved.label}\nModel: ${resolved.model}\nBot dapat menjawab langsung tanpa membuka aplikasi web.`;
+}
+
+function assistantErrorText(error: unknown) {
+  const detail = error instanceof Error ? error.message : "Koneksi model tidak diketahui.";
+  if (/belum terhubung|auth|login|token|credential/i.test(detail)) {
+    return "Model AI belum terhubung ke akun ChatGPT pada server. Jalankan login admin satu kali dan pastikan penyimpanan autentikasi Vercel Blob aktif.";
+  }
+  if (/waktu|timeout|habis/i.test(detail)) {
+    return "Model AI melewati batas waktu pemrosesan. Silakan coba kembali; proses cold start berikutnya biasanya lebih cepat.";
+  }
+  return `Model AI belum siap: ${detail}`;
+}
 
 function questionFromMessage(message: TelegramMessage) {
   const text = message.text?.trim() ?? "";
@@ -161,6 +188,16 @@ async function answerTelegramMessage(message: TelegramMessage) {
   const text = message.text.trim();
   if (/^\/(?:start|help)(?:@\w+)?(?:\s|$)/i.test(text)) {
     await sendText(message.chat.id, HELP_TEXT, message.message_id);
+    return;
+  }
+  if (/^\/status(?:@\w+)?(?:\s|$)/i.test(text)) {
+    await sendTyping(message.chat.id);
+    try {
+      await sendText(message.chat.id, await assistantStatusText(), message.message_id);
+    } catch (error) {
+      console.error("Status model Telegram gagal dibaca:", error instanceof Error ? error.message : error);
+      await sendText(message.chat.id, assistantErrorText(error), message.message_id);
+    }
     return;
   }
   if (/^\/reset(?:@\w+)?(?:\s|$)/i.test(text)) {
@@ -193,7 +230,7 @@ async function answerTelegramMessage(message: TelegramMessage) {
     });
   } catch (error) {
     console.error("Telegram bot gagal menjawab:", error instanceof Error ? error.message : error);
-    await sendText(message.chat.id, "Maaf, data belum dapat diproses saat ini. Silakan coba kembali beberapa saat lagi.", message.message_id);
+    await sendText(message.chat.id, `${assistantErrorText(error)} Silakan coba kembali beberapa saat lagi.`, message.message_id);
   }
 }
 

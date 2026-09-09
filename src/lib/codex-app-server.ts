@@ -292,7 +292,11 @@ class CodexAppServerClient {
     await this.syncPersistentAuth();
     await this.ensureStarted();
     if (this.accountCache && this.accountCache.expiresAt > Date.now()) return this.accountCache.value;
-    const result = record(await this.request("account/read", { refreshToken: false }));
+    // Telegram and other server-to-server callers do not have a browser session
+    // available to refresh an expired ChatGPT access token. Ask App Server to
+    // refresh it during every uncached account check so a cold invocation is
+    // self-sufficient.
+    const result = record(await this.request("account/read", { refreshToken: true }));
     const account = record(result?.account);
     const value = {
       connected: account?.type === "chatgpt",
@@ -336,7 +340,9 @@ class CodexAppServerClient {
   }
 
   async runTurn(options: { instructions: string; conversation: string; tools: DynamicTool[]; onToolCall: ToolHandler }) {
-    await this.ensureStarted();
+    // accountStatus synchronizes the encrypted auth file before starting Codex.
+    // Keep this order: starting first could make a cold Telegram invocation load
+    // stale credentials and only recover after the web assistant was opened.
     const status = await this.accountStatus();
     if (!status.connected) {
       const hint = process.env.NODE_ENV === "production"

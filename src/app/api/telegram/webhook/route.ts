@@ -3,7 +3,9 @@ import { acceptTelegramUpdate, enqueueTelegramUpdate, getTelegramBotAccess, type
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Cold-starting Codex, restoring its encrypted auth, and completing a model turn
+// can exceed the old 120-second ceiling. Vercel will cap this to the project plan.
+export const maxDuration = 300;
 
 export async function GET() {
   const configured = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_WEBHOOK_SECRET);
@@ -27,6 +29,12 @@ export async function POST(request: Request) {
   }
   if (!Number.isInteger(update.update_id)) return NextResponse.json({ ok: false }, { status: 400 });
   if (!acceptTelegramUpdate(update.update_id)) return NextResponse.json({ ok: true, duplicate: true });
-  after(async () => { await enqueueTelegramUpdate(update); });
+  after(async () => {
+    try {
+      await enqueueTelegramUpdate(update);
+    } catch (error) {
+      console.error("Pemrosesan update Telegram gagal:", error instanceof Error ? error.message : error);
+    }
+  });
   return NextResponse.json({ ok: true });
 }
