@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "postbuild": "node scripts/configure-telegram-webhook.mjs sync",
     "start": "next start",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",

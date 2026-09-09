@@ -18,6 +18,8 @@ npm run telegram:webhook:set
 
 Periksa status dengan `npm run telegram:webhook:info` dan hapus webhook dengan `npm run telegram:webhook:delete`.
 
+Pada deployment Production Vercel, webhook juga disinkronkan otomatis setelah build menggunakan `VERCEL_PROJECT_PRODUCTION_URL`. Dengan demikian, perubahan domain produksi tidak perlu didaftarkan ulang secara manual.
+
 Bot dapat digunakan siapa pun melalui chat pribadi. Dalam grup, gunakan `/tanya <pertanyaan>`. Riwayat singkat disimpan selama 30 menit untuk memahami pertanyaan lanjutan. Perintah `/reset` menghapus konteks tersebut.
 
 Untuk deployment Vercel dengan workspace ChatGPT Business/Enterprise, gunakan `AI_PROVIDER=codex` dan simpan access token ber-scope Codex sebagai `CODEX_ACCESS_TOKEN`. Paket resmi Codex CLI sudah menjadi dependency produksi dan App Server memakai token tersebut secara non-interaktif. Jangan pernah memasukkan token ke source code, repository, atau log.
