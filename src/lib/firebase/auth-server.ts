@@ -1,5 +1,6 @@
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { isAdminEmail, isInternalEmail, normalizeEmail } from "@/lib/auth-config";
 import { firebaseAdminAuth, firebaseAdminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 
@@ -117,6 +118,13 @@ export async function getCurrentSession(checkRevoked = true) {
   } catch {
     return null;
   }
+}
+
+export async function approvedApiGuard() {
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ message: "Silakan masuk untuk mengakses layanan ini." }, { status: 401 });
+  if (session.profile.status !== "approved") return NextResponse.json({ message: "Akses akun belum aktif." }, { status: 403 });
+  return null;
 }
 
 export function isSameOriginRequest(request: Request) {

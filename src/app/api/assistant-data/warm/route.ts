@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { queryDashboardData, queryDistributionData, queryMunfikData, queryParticipantData } from "@/lib/ai-data-query";
+import { approvedApiGuard } from "@/lib/firebase/auth-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST() {
+  const denied = await approvedApiGuard(); if (denied) return denied;
   const startedAt = Date.now();
   const sources = ["dashboard", "participants", "munfik", "distribution"];
   const entries = await Promise.allSettled([

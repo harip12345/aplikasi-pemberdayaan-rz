@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runDataAssistant, type AssistantInputMessage } from "@/lib/ai-assistant";
+import { approvedApiGuard } from "@/lib/firebase/auth-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,6 +24,7 @@ function withinRateLimit(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const denied = await approvedApiGuard(); if (denied) return denied;
   try {
     if (!withinRateLimit(request)) return NextResponse.json({ message: "Terlalu banyak permintaan. Coba lagi dalam satu menit." }, { status: 429 });
     const body = await request.json() as { messages?: AssistantInputMessage[] };

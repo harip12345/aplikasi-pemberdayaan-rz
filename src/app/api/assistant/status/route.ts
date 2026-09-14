@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { codexAppServer } from "@/lib/codex-app-server";
 import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHttpAiProvider } from "@/lib/ai-providers";
 import { isCodexAuthPersistenceConfigured } from "@/lib/codex-auth-storage";
+import { approvedApiGuard } from "@/lib/firebase/auth-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function GET() {
+  const denied = await approvedApiGuard(); if (denied) return denied;
   try {
     const provider = configuredAiProvider();
     if (provider === "codex") {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { reconcileAiDataSources } from "@/lib/ai-data-query";
 import { isForcedDataRefresh } from "@/lib/server-data-cache";
+import { approvedApiGuard } from "@/lib/firebase/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ function optionalMonth(value: string | null) {
 }
 
 export async function GET(request: Request) {
+  const denied = await approvedApiGuard(); if (denied) return denied;
   try {
     const url = new URL(request.url);
     const data = await reconcileAiDataSources({
@@ -23,4 +25,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: error instanceof Error ? error.message : "Rekonsiliasi data tidak dapat dijalankan." }, { status: 502 });
   }
 }
-
