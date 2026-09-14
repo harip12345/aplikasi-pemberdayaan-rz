@@ -8,6 +8,7 @@ import { formatNumber, metrics as fallbackMetrics, type Metric } from "@/data/da
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import type { DashboardSheetData, DashboardSheetMetric } from "@/lib/dashboard-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
+import { useReportingPeriod } from "@/components/ReportingPeriodContext";
 
 function achievementBetween(metric: DashboardSheetMetric, startMonthIndex: number, endMonthIndex: number) {
   return metric.monthly.slice(startMonthIndex, endMonthIndex + 1).reduce((total, value) => total + value, 0);
@@ -37,6 +38,7 @@ function mergeSheetMetric(metric: Metric, sheetMetric: DashboardSheetMetric | un
 }
 
 export function DashboardView() {
+  const { setPeriod: setAssistantPeriod } = useReportingPeriod();
   const cachedDashboard = getCachedJsonSnapshot<DashboardSheetData>("dashboard-sheet-production-v2");
   const [sheetData, setSheetData] = useState<DashboardSheetData | null>(cachedDashboard);
   const [startMonthIndex, setStartMonthIndex] = useState(0);
@@ -81,6 +83,11 @@ export function DashboardView() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!sheetData) return;
+    setAssistantPeriod({ startMonthIndex, endMonthIndex, year: sheetData.year });
+  }, [endMonthIndex, setAssistantPeriod, sheetData, startMonthIndex]);
 
   const dashboardMetrics = useMemo(() => {
     const sheetMetrics = new Map(sheetData?.metrics.map((metric) => [metric.id, metric]) ?? []);

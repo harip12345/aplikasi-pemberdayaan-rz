@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDataAssistant, type AssistantInputMessage } from "@/lib/ai-assistant";
 import { approvedApiGuard } from "@/lib/firebase/auth-server";
+import { validReportingPeriod, type ReportingPeriod } from "@/lib/reporting-period";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,11 +28,12 @@ export async function POST(request: Request) {
   const denied = await approvedApiGuard(); if (denied) return denied;
   try {
     if (!withinRateLimit(request)) return NextResponse.json({ message: "Terlalu banyak permintaan. Coba lagi dalam satu menit." }, { status: 429 });
-    const body = await request.json() as { messages?: AssistantInputMessage[] };
+    const body = await request.json() as { messages?: AssistantInputMessage[]; periodContext?: ReportingPeriod };
     if (!Array.isArray(body.messages) || body.messages.length === 0) return NextResponse.json({ message: "Pesan wajib diisi." }, { status: 400 });
     if (body.messages.length > 20 || body.messages.some((message) => typeof message.content === "string" && message.content.length > 6000)) return NextResponse.json({ message: "Percakapan terlalu panjang. Hapus chat lalu coba kembali." }, { status: 400 });
     if (body.messages.some((message) => !["user", "assistant"].includes(message.role) || typeof message.content !== "string")) return NextResponse.json({ message: "Format pesan tidak valid." }, { status: 400 });
-    const result = await runDataAssistant(body.messages);
+    if (body.periodContext !== undefined && !validReportingPeriod(body.periodContext)) return NextResponse.json({ message: "Konteks periode tidak valid." }, { status: 400 });
+    const result = await runDataAssistant(body.messages, body.periodContext);
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Asisten AI gagal menjawab:", error instanceof Error ? error.message : error);

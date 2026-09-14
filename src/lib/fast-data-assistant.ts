@@ -8,6 +8,7 @@ import {
 } from "@/lib/ai-data-query";
 import { DASHBOARD_MONTHS } from "@/lib/dashboard-sheets";
 import type { DetailMetricId } from "@/lib/ai-data-normalizers";
+import type { ReportingPeriod } from "@/lib/reporting-period";
 
 type SourceLink = { label: string; url: string; updatedAt: string };
 export type FastAssistantResult = {
@@ -149,7 +150,7 @@ function resolvedLocation(result: object, fallback: string | null) {
   return values.length === 1 ? values[0] : values.slice(0, -1).join(", ") + " dan " + values.at(-1);
 }
 
-export async function tryFastDataAssistant(question: string, previousQuestion = ""): Promise<FastAssistantResult | null> {
+export async function tryFastDataAssistant(question: string, previousQuestion = "", defaultPeriod?: ReportingPeriod): Promise<FastAssistantResult | null> {
   const explicitVillageList = /\bdesa\b/i.test(question) && /\b(mana(?:\s+saja|\s+aja)?|apa(?:\s+saja|\s+aja)?|daftar|lampirkan|sebutkan|tampilkan|nama(?:-nama)?|rincian)\b/i.test(question);
   const directRoute = ROUTES.find((item) => item.pattern.test(question))?.route ?? (explicitVillageList ? ROUTES[0].route : undefined);
   const contextualBreakdown = !directRoute && /\b(detail|rincian|pecah|sebaran)(?:nya)?\b/i.test(question) && /\b(kota|kab|kabupaten|provinsi|cabang|program|status|bulan|asnaf|sumber)\b/i.test(question);
@@ -166,14 +167,20 @@ export async function tryFastDataAssistant(question: string, previousQuestion = 
   const province = broadProvince(parsedCity);
   const city = province ? null : parsedCity;
   const locationLabel = province ?? city;
-  const period = selectedPeriod(contextualBreakdown ? previousQuestion : question);
+  const periodQuestion = contextualBreakdown ? previousQuestion : question;
+  const explicitPeriod = selectedPeriod(periodQuestion);
+  const period = Object.keys(explicitPeriod).length > 0
+    ? explicitPeriod
+    : defaultPeriod ? { startMonthIndex: defaultPeriod.startMonthIndex, endMonthIndex: defaultPeriod.endMonthIndex } : {};
   const limit = requestedLimit(question, ranked) ?? (breakdown ? 50 : undefined);
 
   let result: Awaited<ReturnType<typeof queryParticipantData>> | Awaited<ReturnType<typeof queryDistributionData>> | Awaited<ReturnType<typeof queryMunfikData>> | Awaited<ReturnType<typeof queryDetailData>>;
   let toolName = "";
   if (route.kind === "participants") {
     if (groupBy && !["program", "subProgram", "province", "city", "branch", "month", "asnaf"].includes(groupBy)) return null;
-    result = await queryParticipantData({ source: "participants", ...period, ...(province ? { province } : {}), ...(city ? { city } : {}), ...(groupBy ? { groupBy: groupBy as ParticipantGroup, limit } : {}) });
+    const explicitYear = Number(periodQuestion.match(/\b(20\d{2})\b/)?.[1]);
+    const year = Number.isInteger(explicitYear) ? explicitYear : defaultPeriod?.year;
+    result = await queryParticipantData({ source: "participants", ...period, ...(year ? { year } : {}), ...(province ? { province } : {}), ...(city ? { city } : {}), ...(groupBy ? { groupBy: groupBy as ParticipantGroup, limit } : {}) });
     toolName = "fast:query_participants";
   } else if (route.kind === "distribution") {
     if (groupBy && !["program", "province", "city", "branch", "status"].includes(groupBy)) return null;

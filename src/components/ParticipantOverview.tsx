@@ -6,6 +6,7 @@ import { Download, Eye, EyeOff, FileDown, FileSpreadsheet, Filter, RefreshCw, Ro
 import type { SheetData } from "write-excel-file/browser";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import { ASNAF_FIELDS, type AsnafField, type ParticipantRow, type ParticipantSheetData } from "@/lib/participant-sheets";
+import { useReportingPeriod } from "@/components/ReportingPeriodContext";
 
 const ALL = "Semua";
 const ParticipantCharts = dynamic(() => import("@/components/ParticipantCharts").then((module) => module.ParticipantCharts), { loading: () => <div className="h-[330px] animate-pulse rounded-[26px] bg-slate-100 xl:col-span-2" /> });
@@ -142,6 +143,7 @@ function MonthSelect({ label, value, months, minimum = 0, onChange }: { label: s
 }
 
 export function ParticipantOverview() {
+  const { setPeriod: setAssistantPeriod } = useReportingPeriod();
   const cachedParticipants = getCachedJsonSnapshot<ParticipantSheetData>("participants-sheet-v1");
   const [data, setData] = useState<ParticipantSheetData | null>(cachedParticipants);
   const [isLoading, setIsLoading] = useState(!cachedParticipants);
@@ -166,6 +168,11 @@ export function ParticipantOverview() {
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    setAssistantPeriod({ startMonthIndex: filters.startMonthIndex, endMonthIndex: filters.endMonthIndex, year: data.year });
+  }, [data, filters.endMonthIndex, filters.startMonthIndex, setAssistantPeriod]);
 
   const periodRows = useMemo(() => data?.rows.filter((row) => row.year === data.year && row.monthIndex >= filters.startMonthIndex && row.monthIndex <= filters.endMonthIndex) ?? [], [data, filters.endMonthIndex, filters.startMonthIndex]);
   const provinces = useMemo(() => unique(periodRows.map((row) => row.province)), [periodRows]);

@@ -1,21 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Bot, CheckCircle2, Copy, Database, ExternalLink, Loader2, LogIn, MessageCircle, RotateCcw, Send, X } from "lucide-react";
+import { useReportingPeriod } from "@/components/ReportingPeriodContext";
+import { REPORTING_MONTHS, reportingPeriodLabel } from "@/lib/reporting-period";
 
 type SourceLink = { label: string; url: string; updatedAt: string };
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; sources?: SourceLink[]; usedTools?: string[] };
 type ProviderStatus = { label?: string; model?: string; connected: boolean; loginAvailable?: boolean; canManageLogin?: boolean; planType?: string | null; message?: string };
 type LoginCode = { verificationUrl: string; userCode: string };
 type LoginEvent = { type: "code"; verificationUrl: string; userCode: string } | { type: "complete"; connected: true; planType?: string | null } | { type: "error"; message: string };
-
-const SUGGESTIONS = [
-  "Berapa total Peserta Program Januari–Juli 2026?",
-  "Urutkan 5 program dengan peserta terbesar.",
-  "Berapa Munfik per sumber sampai Juli?",
-  "Apakah data Dashboard dan detail sudah cocok?",
-  "Apa itu program Rumah Vokasi?",
-];
 
 function messageId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -30,6 +24,7 @@ function MessageContent({ content }: { content: string }) {
 }
 
 export function SmartAssistant() {
+  const { period } = useReportingPeriod();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -40,6 +35,24 @@ export function SmartAssistant() {
   const [loginState, setLoginState] = useState<"idle" | "starting" | "waiting">("idle");
   const [telegramUrl, setTelegramUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const suggestions = useMemo(() => {
+    if (!period) return [
+      "Berapa total Peserta Program pada periode terbaru?",
+      "Urutkan 5 program dengan peserta terbesar.",
+      "Berapa Munfik per sumber pada periode terbaru?",
+      "Apakah data Dashboard dan detail sudah cocok?",
+      "Apa itu program Rumah Vokasi?",
+    ];
+    const label = reportingPeriodLabel(period);
+    const endMonth = REPORTING_MONTHS[period.endMonthIndex];
+    return [
+      `Berapa total Peserta Program ${label}?`,
+      `Urutkan 5 program dengan peserta terbesar pada periode ${label}.`,
+      `Berapa Munfik per sumber sampai ${endMonth}?`,
+      `Apakah data Dashboard dan detail sudah cocok untuk periode ${label}?`,
+      "Apa itu program Rumah Vokasi?",
+    ];
+  }, [period]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -132,7 +145,7 @@ export function SmartAssistant() {
       const response = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages.map(({ role, content: text }) => ({ role, content: text })) }),
+        body: JSON.stringify({ messages: nextMessages.map(({ role, content: text }) => ({ role, content: text })), periodContext: period }),
       });
       const payload = await response.json() as { message?: string; provider?: string; model?: string; usedTools?: string[]; sources?: SourceLink[] };
       if (!response.ok || !payload.message) throw new Error(payload.message || "Asisten belum dapat menjawab.");
@@ -180,7 +193,7 @@ export function SmartAssistant() {
             </div>}
             {telegramUrl && <a href={telegramUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-[#229ED9] px-3 py-2.5 text-xs font-bold text-white transition hover:bg-[#168AC0]"><Send size={14} /> Akses melalui bot Telegram</a>}
           </div>
-          <div className="grid gap-2">{SUGGESTIONS.map((suggestion) => <button type="button" key={suggestion} disabled={status?.connected === false} onClick={() => void sendMessage(suggestion)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-medium leading-5 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}</div>
+          <div className="grid gap-2">{suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={status?.connected === false} onClick={() => void sendMessage(suggestion)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-medium leading-5 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}</div>
         </div>}
         <div className="space-y-3">{messages.map((message) => <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-[#D84315] text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-sm"}`}><MessageContent content={message.content} />{message.role === "assistant" && Boolean(message.sources?.length) && <div className="mt-3 border-t border-slate-100 pt-2"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Sumber data</p>{message.sources!.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 py-0.5 text-[11px] font-semibold text-[#D84315] hover:underline"><ExternalLink size={11} />{source.label}</a>)}</div>}</div></div>)}</div>
         {isSending && <div className="mt-3 flex justify-start"><div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 shadow-sm"><Loader2 size={15} className="animate-spin text-[#D84315]" /> Mencari dan memeriksa data…</div></div>}

@@ -1,6 +1,8 @@
 import { runDataAssistant, type AssistantInputMessage } from "@/lib/ai-assistant";
 import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHttpAiProvider } from "@/lib/ai-providers";
 import { codexAppServer } from "@/lib/codex-app-server";
+import { queryDashboardData } from "@/lib/ai-data-query";
+import { REPORTING_MONTHS, reportingPeriodLabel, type ReportingPeriod } from "@/lib/reporting-period";
 
 type TelegramChat = { id: number; type: "private" | "group" | "supergroup" | "channel" | string };
 type TelegramMessage = {
@@ -135,22 +137,50 @@ function sourceAppendix(sources: Array<{ label: string; url: string }>) {
   return unique.length ? `\n\nSumber data:\n${unique.map((source) => `• ${source.label}: ${source.url}`).join("\n")}` : "";
 }
 
-const HELP_TEXT = `Asisten Data Program RZ
+async function nationalReportingPeriod(): Promise<ReportingPeriod | undefined> {
+  try {
+    const dashboard = await queryDashboardData({ source: "dashboard" });
+    return {
+      startMonthIndex: dashboard.period.startMonthIndex,
+      endMonthIndex: dashboard.period.endMonthIndex,
+      year: dashboard.period.year,
+    };
+  } catch (error) {
+    console.warn("Periode nasional Telegram tidak dapat dibaca:", error instanceof Error ? error.message : error);
+    return undefined;
+  }
+}
 
-Kirim pertanyaan data atau informasi program seperti:
-• Berapa total Peserta Program Januari–Juli 2026?
+async function telegramHelpText() {
+  const period = await nationalReportingPeriod();
+  const periodLabel = period ? reportingPeriodLabel(period) : "periode data nasional terbaru";
+  const latestMonth = period ? REPORTING_MONTHS[period.endMonthIndex] : "periode terbaru";
+  return `ASISTEN DATA PROGRAM RZ
+
+Asisten ini membantu menelusuri capaian, peserta, wilayah, Desa Berdaya, validitas data, serta informasi program Rumah Zakat berdasarkan sumber resmi. Jika periode tidak disebutkan, bot menggunakan periode nasional terbaru: ${periodLabel}.
+
+Kemampuan utama:
+• Menghitung capaian, target, persentase, dan rincian peserta.
+• Membuat peringkat atau perbandingan menurut program, wilayah, cabang, bulan, dan asnaf.
+• Menampilkan daftar Desa Berdaya dan titik program.
+• Menjelaskan definisi, tujuan, dan konsep program berdasarkan katalog resmi.
+• Memeriksa kecocokan data Dashboard dengan sumber detail.
+
+Contoh pertanyaan:
+• Berapa total Peserta Program ${periodLabel}?
+• Berapa Munfik per sumber sampai ${latestMonth}?
 • Lampirkan desa yang ada di Papua.
 • Kota dengan jumlah Muzaki terbanyak?
-• Berapa Munfik per sumber sampai Juli?
 • Apa itu program Rumah Vokasi?
-• Jelaskan konsep Desa Berdaya berdasarkan katalog program.
-• Program apa yang sesuai untuk pemberdayaan ekonomi mustahik?
 
 Perintah:
-/tanya <pertanyaan> — bertanya di grup atau chat pribadi
-/status — cek koneksi model AI dari server Telegram
+/tanya <pertanyaan> — ajukan pertanyaan di grup atau chat pribadi
+/status — periksa kesiapan model AI
 /reset — hapus konteks percakapan
-/help — tampilkan panduan`;
+/help — tampilkan panduan ini
+
+Pada chat pribadi, pertanyaan dapat dikirim langsung tanpa /tanya.`;
+}
 
 async function assistantStatusText() {
   const provider = configuredAiProvider();
@@ -187,7 +217,7 @@ async function answerTelegramMessage(message: TelegramMessage) {
   if (!message.text || message.from?.is_bot) return;
   const text = message.text.trim();
   if (/^\/(?:start|help)(?:@\w+)?(?:\s|$)/i.test(text)) {
-    await sendText(message.chat.id, HELP_TEXT, message.message_id);
+    await sendText(message.chat.id, await telegramHelpText(), message.message_id);
     return;
   }
   if (/^\/status(?:@\w+)?(?:\s|$)/i.test(text)) {
@@ -221,7 +251,7 @@ async function answerTelegramMessage(message: TelegramMessage) {
   const history = previous && Date.now() - previous.updatedAt <= CONVERSATION_TTL_MS ? previous.messages : [];
   const input = [...history, { role: "user" as const, content: question }].slice(-12);
   try {
-    const result = await runDataAssistant(input);
+    const result = await runDataAssistant(input, await nationalReportingPeriod());
     const responseText = `${result.message}${sourceAppendix(result.sources)}`;
     await sendText(message.chat.id, responseText, message.message_id);
     state.conversations.set(message.chat.id, {
