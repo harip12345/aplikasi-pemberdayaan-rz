@@ -1,9 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { BarChart3, Bot, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Sparkles, UserPlus, Users } from "lucide-react";
+import { BarChart3, Bot, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, UserPlus, Users } from "lucide-react";
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -34,7 +33,50 @@ function authError(error: unknown, fallback: string) {
 }
 
 function GoogleMark() {
-  return <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-sm font-black shadow-sm"><span className="bg-gradient-to-br from-blue-600 via-red-500 to-green-500 bg-clip-text text-transparent">G</span></span>;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-1.99 3.02v2.54h3.23c1.89-1.74 2.98-4.3 2.98-7.41Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.96-.89 6.62-2.36l-3.23-2.54c-.9.6-2.04.96-3.39.96-2.6 0-4.81-1.76-5.6-4.12H3.07v2.62A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.4 13.94A6 6 0 0 1 6.09 12c0-.67.12-1.32.31-1.94V7.44H3.07A10 10 0 0 0 2 12c0 1.61.39 3.14 1.07 4.56l3.33-2.62Z" />
+      <path fill="#EA4335" d="M12 5.94c1.47 0 2.79.51 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.93 5.44l3.33 2.62c.79-2.36 3-4.12 5.6-4.12Z" />
+    </svg>
+  );
+}
+
+function OnboardingBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden text-[#E85A24]">
+      <div className="absolute -left-20 top-16 h-64 w-64 rounded-full bg-orange-200/25 blur-sm" />
+      <div className="absolute -right-24 bottom-[-5rem] h-80 w-80 rounded-full bg-orange-100/60" />
+      <div className="absolute left-[3%] top-[31%] hidden max-w-[180px] -rotate-6 font-serif text-lg italic leading-6 opacity-[0.16] xl:block">Kolaborasi untuk masyarakat yang lebih berdaya</div>
+      <div className="absolute bottom-[10%] left-[3%] hidden max-w-[170px] -rotate-3 font-serif text-lg italic leading-6 opacity-[0.15] xl:block">Berdaya bersama untuk Indonesia</div>
+      <div className="absolute right-[3%] top-[20%] hidden max-w-[155px] rotate-3 font-serif text-lg italic leading-6 opacity-[0.15] xl:block">Data mendorong perubahan nyata</div>
+      <div className="absolute bottom-[8%] right-[3%] hidden max-w-[165px] -rotate-6 font-serif text-lg italic leading-6 opacity-[0.15] xl:block">Dari data untuk dampak yang lebih luas</div>
+
+      <svg viewBox="0 0 1440 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full opacity-[0.13]">
+        <path d="M1085 90c75 10 83 82 154 95 54 10 83-34 139-13" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="7 9" />
+        <path d="M34 410c44 26 48 89 35 151" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="7 9" />
+        <circle cx="1115" cy="113" r="11" fill="currentColor" />
+        <path d="M1098 145c2-18 10-28 17-28s15 10 17 28Z" fill="currentColor" />
+        <circle cx="1250" cy="180" r="9" fill="currentColor" />
+        <path d="M1235 206c2-15 8-23 15-23s13 8 15 23Z" fill="currentColor" />
+        <circle cx="1360" cy="133" r="10" fill="currentColor" />
+        <path d="M1344 162c2-17 9-26 16-26s14 9 16 26Z" fill="currentColor" />
+
+        <g transform="translate(15 720)">
+          <path d="M0 100 58 45l58 55v76H0Zm126 20 40-38 40 38v56h-80Z" fill="currentColor" />
+          <rect x="44" y="122" width="27" height="54" rx="3" fill="#FFF9F5" />
+          <rect x="153" y="137" width="20" height="39" rx="2" fill="#FFF9F5" />
+          <path d="M230 176v-69m0 8c-21-5-26-22-18-36 20 3 29 17 18 36Zm0 9c20-6 28-22 20-37-20 3-29 18-20 37Z" fill="currentColor" stroke="currentColor" strokeWidth="7" strokeLinecap="round" />
+        </g>
+        <g transform="translate(1190 706)">
+          <path d="M0 104 67 43l67 61v72H0Zm146 21 38-36 38 36v51h-76Z" fill="currentColor" />
+          <rect x="52" y="124" width="30" height="52" rx="3" fill="#FFF9F5" />
+          <path d="M251 176v-63m0 8c-18-5-24-20-16-33 17 3 25 16 16 33Zm0 8c18-5 25-20 18-33-18 3-26 16-18 33Z" fill="currentColor" stroke="currentColor" strokeWidth="7" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
+  );
 }
 
 export function AuthForm() {
@@ -139,18 +181,15 @@ export function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#fff1e6_0,#fffaf6_38%,#f8fafc_100%)] px-4 py-5 sm:px-6 lg:py-10">
-      <header className="mx-auto mb-6 flex max-w-[1220px] items-center gap-3">
-        <span className="flex h-14 w-32 items-center justify-center rounded-2xl bg-white px-4 shadow-sm ring-1 ring-orange-100"><Image src="/logo-rz.png" alt="Rumah Zakat" width={100} height={34} className="h-auto w-full object-contain" priority /></span>
-        <div><p className="text-lg font-bold text-[#172436]">Laporan Pemberdayaan</p><p className="text-sm font-medium text-slate-500">Rumah Zakat</p></div>
-      </header>
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,#fff0e4_0,#fffaf7_42%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <OnboardingBackdrop />
 
-      <div className="mx-auto grid max-w-[1220px] overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-[0_30px_80px_rgba(30,41,59,0.14)] lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="relative z-10 my-auto mx-auto grid w-full max-w-[1120px] overflow-hidden rounded-[30px] border border-white/90 bg-white/95 shadow-[0_30px_80px_rgba(30,41,59,0.16)] backdrop-blur-sm lg:grid-cols-[0.95fr_1.05fr]">
         <section className="relative overflow-hidden bg-gradient-to-br from-[#122033] via-[#1E3048] to-[#2D4057] p-7 text-white sm:p-10 lg:p-12">
           <div className="absolute -bottom-28 -right-20 h-72 w-72 rounded-full bg-[#F2662F]/25 blur-3xl" />
           <div className="relative">
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-orange-300"><span className="h-1.5 w-7 rounded-full bg-[#F2662F]" /> Portal Data Internal</p>
-            <h1 className="mt-7 max-w-md text-4xl font-bold leading-tight sm:text-5xl">Data program, lebih mudah ditelusuri.</h1>
+            <h1 className="mt-7 max-w-md text-4xl font-bold leading-tight sm:text-5xl">Pusat Data Pemberdayaan Rumah Zakat</h1>
             <p className="mt-5 max-w-lg text-sm leading-7 text-slate-300 sm:text-base">Akses laporan pemberdayaan, peserta program, Desa Berdaya, dan dampak program dalam satu ruang kerja.</p>
             <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
               {[
@@ -158,18 +197,14 @@ export function AuthForm() {
                 { icon: ShieldCheck, title: "Akses terlindungi", text: "Kontrol akses internal dan persetujuan eksternal." },
                 { icon: Users, title: "Rujukan terverifikasi", text: "Data dapat ditelusuri kembali ke sumbernya." },
                 { icon: Bot, title: "AI Asisten Data Program", text: "Temukan data dan insight program lebih cepat." },
-              ].map(({ icon: Icon, title, text }, index) => <div key={title} className="flex gap-4"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${index === 1 ? "bg-white/12 text-white" : "bg-[#F2662F] text-white"}`}><Icon size={20} /></span><div><h2 className="font-bold">{title}</h2><p className="mt-1 text-xs leading-5 text-slate-300">{text}</p></div></div>)}
+              ].map(({ icon: Icon, title, text }) => <div key={title} className="flex gap-4"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#F2662F] text-white shadow-lg shadow-orange-950/15"><Icon size={20} /></span><div><h2 className="font-bold">{title}</h2><p className="mt-1 text-xs leading-5 text-slate-300">{text}</p></div></div>)}
             </div>
           </div>
         </section>
 
         <section className="p-6 sm:p-10 lg:p-12">
           <div className="mx-auto max-w-md">
-            <div className="flex rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="Pilih login atau daftar">
-              <button type="button" onClick={() => switchMode("sign-in")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${mode === "sign-in" ? "bg-white text-[#D84315] shadow-sm" : "text-slate-500"}`}>Masuk</button>
-              <button type="button" onClick={() => switchMode("sign-up")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${mode === "sign-up" ? "bg-white text-[#D84315] shadow-sm" : "text-slate-500"}`}>Daftar</button>
-            </div>
-            <h2 className="mt-7 text-3xl font-bold text-[#172436]">{mode === "sign-in" ? "Selamat datang" : "Buat akun"}</h2>
+            <h2 className="text-3xl font-bold leading-tight text-[#172436]">{mode === "sign-in" ? "Selamat Datang, Sobat Pejuang." : "Buat Akun"}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">{mode === "sign-in" ? "Masuk untuk mengakses Dashboard Pemberdayaan Rumah Zakat." : "Akun internal aktif otomatis. Akun eksternal akan ditinjau oleh admin."}</p>
 
             <form onSubmit={mode === "sign-in" ? signIn : signUp} className="mt-6 space-y-3.5">
@@ -185,11 +220,15 @@ export function AuthForm() {
 
             <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" /> atau <span className="h-px flex-1 bg-slate-200" /></div>
             <button type="button" disabled={busy} onClick={() => void signInWithGoogle()} className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-[#172436] transition hover:border-orange-200 hover:bg-orange-50/40 disabled:opacity-60"><GoogleMark /> Lanjutkan dengan Google</button>
-            <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3"><div className="flex gap-3"><Sparkles size={18} className="mt-0.5 shrink-0 text-emerald-600" /><div><p className="text-xs font-bold text-emerald-800">Akun internal</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Email @{INTERNAL_EMAIL_DOMAIN} dapat langsung masuk.</p></div></div></div>
+            <div className="mt-5 flex rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="Pilih login atau daftar">
+              <button type="button" onClick={() => switchMode("sign-in")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${mode === "sign-in" ? "bg-white text-[#D84315] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Masuk</button>
+              <button type="button" onClick={() => switchMode("sign-up")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${mode === "sign-up" ? "bg-white text-[#D84315] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Daftar</button>
+            </div>
             <p className="mt-5 text-center text-[11px] leading-5 text-slate-400">Dengan melanjutkan, Anda menyetujui kebijakan akses dan keamanan data.</p>
           </div>
         </section>
       </div>
+      <footer className="relative z-10 mx-auto mt-5 text-center text-[11px] leading-5 text-slate-500 sm:text-xs">Copyright © 2026 Rumah Zakat — Program Data Optimization Department. All rights reserved.</footer>
     </div>
   );
 }
