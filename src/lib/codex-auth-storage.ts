@@ -2,9 +2,10 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 const AUTH_BLOB_PATH = "rz-dashboard/codex-auth.v1.enc";
+const AUTH_REFRESH_LOCK_PATH = "rz-dashboard/codex-auth-refresh-lock.v1.json";
 const AUTH_HOME = join(tmpdir(), "rz-dashboard-codex");
 const AUTH_FILE = join(AUTH_HOME, "auth.json");
 const CONFIG_FILE = join(AUTH_HOME, "config.toml");
@@ -25,6 +26,22 @@ let lastSavedHash: string | null = null;
 type StoredAuth = {
   auth: Buffer;
   etag: string;
+};
+
+type RefreshLock = {
+  version: 1;
+  owner: string;
+  expiresAt: number;
+};
+
+export type CodexAuthPersistenceStatus = {
+  configured: boolean;
+  stored: boolean;
+  local: boolean;
+  lastRefreshAt: string | null;
+  accessTokenExpiresAt: string | null;
+  refreshDue: boolean;
+  storageError: string | null;
 };
 
 function hasBlobCredential() {
@@ -61,6 +78,47 @@ function authRefreshTime(value: Buffer) {
   } catch {
     return 0;
   }
+}
+
+function findStringProperty(value: unknown, property: string): string | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findStringProperty(item, property);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record[property] === "string" && record[property]) return record[property];
+  for (const nested of Object.values(record)) {
+    const found = findStringProperty(nested, property);
+    if (found) return found;
+  }
+  return null;
+}
+
+function accessTokenExpiry(value: Buffer) {
+  try {
+    const parsed = JSON.parse(value.toString("utf8")) as unknown;
+    const token = findStringProperty(parsed, "access_token");
+    if (!token) return 0;
+    const payload = token.split(".")[1];
+    if (!payload) return 0;
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { exp?: unknown };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function refreshDue(value: Buffer, skewMs = Number(process.env.CODEX_AUTH_REFRESH_SKEW_MS || 10 * 60 * 1000)) {
+  const expiresAt = accessTokenExpiry(value);
+  if (expiresAt) return expiresAt <= Date.now() + Math.max(60_000, skewMs);
+  const refreshedAt = authRefreshTime(value);
+  if (!refreshedAt) return true;
+
+  return refreshedAt <= Date.now() - 45 * 60 * 1000;
 }
 
 async function writeAuthFile(auth: Buffer) {
@@ -110,7 +168,7 @@ async function installStoredAuth(stored: StoredAuth) {
 export async function preparePersistentCodexHome() {
   if (!isCodexAuthPersistenceConfigured()) return null;
   if (preparePromise) return preparePromise;
-  preparePromise = (async () => {
+  const preparing = (async () => {
     await mkdir(AUTH_HOME, { recursive: true });
     await writeFile(CONFIG_FILE, 'cli_auth_credentials_store = "file"\ncheck_for_update_on_startup = false\n', { mode: 0o600 });
 
@@ -118,7 +176,15 @@ export async function preparePersistentCodexHome() {
     if (stored) await installStoredAuth(stored);
     return AUTH_HOME;
   })();
-  return preparePromise;
+  preparePromise = preparing;
+  try {
+    return await preparing;
+  } catch (error) {
+    // Kegagalan Blob sementara pada cold start tidak boleh merusak instance
+    // sampai selamanya; panggilan berikutnya mendapat satu kesempatan baru.
+    if (preparePromise === preparing) preparePromise = null;
+    throw error;
+  }
 }
 
 export async function syncPersistentCodexAuth() {
@@ -148,6 +214,89 @@ async function readLocalAuth() {
   }
 }
 
+export async function localCodexAuthNeedsRefresh() {
+  const auth = await readLocalAuth();
+  return auth ? refreshDue(auth) : true;
+}
+
+export async function inspectCodexAuthPersistence(): Promise<CodexAuthPersistenceStatus> {
+  const configured = isCodexAuthPersistenceConfigured();
+  if (!configured) return { configured: false, stored: false, local: false, lastRefreshAt: null, accessTokenExpiresAt: null, refreshDue: true, storageError: null };
+  let stored: StoredAuth | null = null;
+  let storageError: string | null = null;
+  try {
+    stored = await readStoredAuth();
+  } catch (error) {
+    storageError = error instanceof Error ? error.message : "Private Blob tidak dapat dibaca.";
+  }
+  const local = await readLocalAuth();
+  const selected = stored?.auth ?? local;
+  const refreshedAt = selected ? authRefreshTime(selected) : 0;
+  const expiresAt = selected ? accessTokenExpiry(selected) : 0;
+  return {
+    configured,
+    stored: Boolean(stored),
+    local: Boolean(local),
+    lastRefreshAt: refreshedAt ? new Date(refreshedAt).toISOString() : null,
+    accessTokenExpiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+    refreshDue: selected ? refreshDue(selected) : true,
+    storageError,
+  };
+}
+
+async function readRefreshLock(): Promise<{ value: RefreshLock; etag: string } | null> {
+  const stored = await get(AUTH_REFRESH_LOCK_PATH, { access: "private", useCache: false });
+  if (stored?.statusCode !== 200) return null;
+  const raw = await new Response(stored.stream).json() as Partial<RefreshLock>;
+  if (raw.version !== 1 || typeof raw.owner !== "string" || typeof raw.expiresAt !== "number") return null;
+  return { value: raw as RefreshLock, etag: stored.blob.etag };
+}
+
+async function acquireRefreshLock(waitMs = 12_000) {
+  const owner = `${process.pid}-${randomBytes(12).toString("hex")}`;
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    const current = await readRefreshLock();
+    const lock: RefreshLock = { version: 1, owner, expiresAt: Date.now() + 90_000 };
+    if (!current || current.value.expiresAt <= Date.now()) {
+      try {
+        await put(AUTH_REFRESH_LOCK_PATH, JSON.stringify(lock), {
+          access: "private",
+          contentType: "application/json",
+          cacheControlMaxAge: 60,
+          addRandomSuffix: false,
+          ...(current ? { ifMatch: current.etag } : { allowOverwrite: false }),
+        });
+        return owner;
+      } catch {
+        // Instance lain memenangkan lock. Tunggu hasil refresh tersimpan ke Blob.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250 + Math.floor(Math.random() * 250)));
+  }
+  return null;
+}
+
+async function releaseRefreshLock(owner: string) {
+  try {
+    const current = await readRefreshLock();
+    if (current?.value.owner === owner) await del(AUTH_REFRESH_LOCK_PATH);
+  } catch {
+    // Lock memiliki masa berlaku, sehingga kegagalan cleanup tidak memblokir permanen.
+  }
+}
+
+export async function withCodexAuthRefreshLock<T>(callback: () => Promise<T>) {
+  if (!isCodexAuthPersistenceConfigured()) return callback();
+  const owner = await acquireRefreshLock();
+  if (!owner) return null;
+  try {
+    return await callback();
+  } finally {
+    await releaseRefreshLock(owner);
+  }
+}
+
 async function waitForLocalAuthChange(waitForChangeMs: number) {
   const deadline = Date.now() + Math.max(0, waitForChangeMs);
   let auth = await readLocalAuth();
@@ -173,6 +322,7 @@ export async function persistCodexAuth(options: { force?: boolean; waitForChange
     access: "private",
     contentType: "application/json",
     cacheControlMaxAge: 60,
+    addRandomSuffix: false,
     allowOverwrite: true,
     ...(ifMatch ? { ifMatch } : {}),
   });

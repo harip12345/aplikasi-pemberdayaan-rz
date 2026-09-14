@@ -1,34 +1,46 @@
 import { NextResponse } from "next/server";
 import { codexAppServer } from "@/lib/codex-app-server";
 import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHttpAiProvider } from "@/lib/ai-providers";
-import { isCodexAuthPersistenceConfigured } from "@/lib/codex-auth-storage";
-import { approvedApiGuard } from "@/lib/firebase/auth-server";
+import { inspectCodexAuthPersistence, isCodexAuthPersistenceConfigured } from "@/lib/codex-auth-storage";
+import { isAdminEmail } from "@/lib/auth-config";
+import { getCurrentSession } from "@/lib/firebase/auth-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function GET() {
-  const denied = await approvedApiGuard(); if (denied) return denied;
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ message: "Silakan masuk untuk mengakses layanan ini." }, { status: 401 });
+  if (session.profile.status !== "approved") return NextResponse.json({ message: "Akses akun belum aktif." }, { status: 403 });
   try {
     const provider = configuredAiProvider();
     if (provider === "codex") {
       const account = await codexAppServer.accountStatus();
-      const loginAvailable = !process.env.CODEX_ACCESS_TOKEN?.trim() && isCodexAuthPersistenceConfigured() && Boolean(process.env.CODEX_LOGIN_ADMIN_SECRET?.trim());
+      const persistence = await inspectCodexAuthPersistence();
+      const admin = session.profile.role === "admin" || isAdminEmail(session.profile.email);
+      const loginAvailable = admin && !process.env.CODEX_ACCESS_TOKEN?.trim() && isCodexAuthPersistenceConfigured();
+      const disconnectedMessage = persistence.storageError
+        ? "Private Blob autentikasi Codex tidak dapat dibaca. Periksa koneksi Blob dan environment production."
+        : !persistence.stored
+          ? "Sesi Codex belum tersimpan di Private Blob. Admin perlu menghubungkan ChatGPT Business satu kali."
+          : "Sesi Codex tersimpan, tetapi token tidak lagi valid. Admin perlu menghubungkan ulang ChatGPT Business.";
       return NextResponse.json({
         provider,
         label: aiProviderLabel(provider),
         model: configuredCodexModel(),
         connected: account.connected,
         loginAvailable,
+        canManageLogin: admin,
         planType: account.planType,
         message: account.connected
           ? "Terhubung melalui workspace ChatGPT. Sesi login tersimpan terenkripsi."
-          : loginAvailable
-            ? "Codex belum terhubung. Gunakan login ChatGPT Business di bawah."
+          : isCodexAuthPersistenceConfigured()
+            ? disconnectedMessage
             : process.env.NODE_ENV === "production"
-            ? "Penyimpanan login Codex belum dikonfigurasi."
-            : "Jalankan codex login atau isi CODEX_ACCESS_TOKEN pada server.",
+              ? "Penyimpanan login Codex belum dikonfigurasi."
+              : "Jalankan codex login atau isi CODEX_ACCESS_TOKEN pada server.",
+        ...(admin ? { authPersistence: persistence } : {}),
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const resolved = resolveHttpAiProvider();

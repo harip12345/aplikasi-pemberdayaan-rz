@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "rz_session";
-const PUBLIC_PATHS = ["/auth/sign-in", "/auth/action", "/auth/forgot-password", "/auth/update-password", "/api/auth/register", "/api/auth/session", "/api/telegram/webhook"];
+const PUBLIC_PATHS = ["/auth/sign-in", "/auth/action", "/auth/forgot-password", "/auth/update-password", "/api/auth/register", "/api/auth/session", "/api/telegram/webhook", "/api/assistant/auth-refresh"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

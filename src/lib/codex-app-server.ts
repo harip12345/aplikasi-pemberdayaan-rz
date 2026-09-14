@@ -4,7 +4,15 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { configuredCodexModel } from "@/lib/ai-providers";
-import { isCodexAuthPersistenceConfigured, persistCodexAuth, preparePersistentCodexHome, restorePersistentCodexAuth, syncPersistentCodexAuth } from "@/lib/codex-auth-storage";
+import {
+  isCodexAuthPersistenceConfigured,
+  localCodexAuthNeedsRefresh,
+  persistCodexAuth,
+  preparePersistentCodexHome,
+  restorePersistentCodexAuth,
+  syncPersistentCodexAuth,
+  withCodexAuthRefreshLock,
+} from "@/lib/codex-auth-storage";
 
 type JsonRecord = Record<string, unknown>;
 type DynamicTool = { type: "function"; name: string; description: string; inputSchema: JsonRecord };
@@ -27,6 +35,7 @@ type LoginWaiter = {
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
+type AccountStatus = { connected: boolean; authType: string | null; email: string | null; planType: string | null };
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const TURN_TIMEOUT_MS = Number(process.env.CODEX_TURN_TIMEOUT_MS || 120_000);
@@ -124,8 +133,8 @@ class CodexAppServerClient {
   private stderr = "";
   private lastAuthSyncAt = 0;
   private authRestartNeeded = false;
-  private accountCache: { value: { connected: boolean; authType: string | null; email: string | null; planType: string | null }; expiresAt: number } | null = null;
-  private accountStatusPromise: Promise<{ connected: boolean; authType: string | null; email: string | null; planType: string | null }> | null = null;
+  private accountCache: { value: AccountStatus; expiresAt: number } | null = null;
+  private accountStatusPromise: Promise<AccountStatus> | null = null;
 
   private send(message: JsonRecord) {
     if (!this.process?.stdin.writable) throw new Error("Proses Codex App Server tidak aktif.");
@@ -317,27 +326,73 @@ class CodexAppServerClient {
     }
   }
 
-  private async readAndPersistAccountStatus() {
-    // Telegram and other server-to-server callers do not have a browser session
-    // available to refresh an expired ChatGPT access token. Ask App Server to
-    // refresh it during every uncached account check so a cold invocation is
-    // self-sufficient.
-    const readAccount = async () => {
-      const result = record(await this.request("account/read", { refreshToken: true }));
-      const account = record(result?.account);
-      return {
-        connected: account?.type === "chatgpt",
-        authType: typeof account?.type === "string" ? account.type : null,
-        email: typeof account?.email === "string" ? account.email : null,
-        planType: typeof account?.planType === "string" ? account.planType : null,
-      };
+  private async readAccount(refreshToken = false): Promise<AccountStatus> {
+    const result = record(await this.request("account/read", { refreshToken }));
+    const account = record(result?.account);
+    return {
+      connected: account?.type === "chatgpt",
+      authType: typeof account?.type === "string" ? account.type : null,
+      email: typeof account?.email === "string" ? account.email : null,
+      planType: typeof account?.planType === "string" ? account.planType : null,
     };
+  }
 
-    let value = await readAccount();
+  async refreshAuthenticationIfNeeded(force = false) {
+    await this.syncPersistentAuth();
+    await this.ensureStarted();
+    const shouldRefresh = force || await localCodexAuthNeedsRefresh();
+    if (!shouldRefresh) {
+      const value = await this.readAccount(false);
+      this.accountCache = { value, expiresAt: Date.now() + (value.connected ? ACCOUNT_CACHE_MS : DISCONNECTED_ACCOUNT_CACHE_MS) };
+      return { ...value, refreshed: false, lockAcquired: false };
+    }
+
+    const refreshed = await withCodexAuthRefreshLock(async () => {
+      const changed = await syncPersistentCodexAuth();
+      if (changed) await this.restartForRestoredAuth();
+      await this.ensureStarted();
+
+      // Instance lain mungkin sudah menyegarkan token sebelum lock didapatkan.
+      if (!force && !await localCodexAuthNeedsRefresh()) {
+        return { value: await this.readAccount(false), refreshed: false };
+      }
+      const value = await this.readAccount(true);
+      if (value.connected) await persistCodexAuth({ force: true, waitForChangeMs: 1_500 });
+      return { value, refreshed: value.connected };
+    });
+
+    if (refreshed) {
+      this.accountCache = { value: refreshed.value, expiresAt: Date.now() + (refreshed.value.connected ? ACCOUNT_CACHE_MS : DISCONNECTED_ACCOUNT_CACHE_MS) };
+      return { ...refreshed.value, refreshed: refreshed.refreshed, lockAcquired: true };
+    }
+
+    // Lock sedang dipegang instance lain. Ambil hasil akhirnya dari Blob satu kali.
+    if (await restorePersistentCodexAuth()) {
+      await this.restartForRestoredAuth();
+      await this.ensureStarted();
+    }
+    const value = await this.readAccount(false);
+    this.accountCache = { value, expiresAt: Date.now() + (value.connected ? ACCOUNT_CACHE_MS : DISCONNECTED_ACCOUNT_CACHE_MS) };
+    return { ...value, refreshed: false, lockAcquired: false };
+  }
+
+  private async readAndPersistAccountStatus() {
+    // Membaca status tidak boleh memutar refresh token pada setiap cold start.
+    // Codex hanya diminta refresh ketika JWT mendekati kedaluwarsa.
+    if (await localCodexAuthNeedsRefresh()) {
+      const refreshed = await this.refreshAuthenticationIfNeeded();
+      return { connected: refreshed.connected, authType: refreshed.authType, email: refreshed.email, planType: refreshed.planType };
+    }
+
+    let value = await this.readAccount(false);
     if (!value.connected && isCodexAuthPersistenceConfigured() && await restorePersistentCodexAuth()) {
       await this.restartForRestoredAuth();
       await this.ensureStarted();
-      value = await readAccount();
+      value = await this.readAccount(false);
+      if (!value.connected && await localCodexAuthNeedsRefresh()) {
+        const refreshed = await this.refreshAuthenticationIfNeeded();
+        value = { connected: refreshed.connected, authType: refreshed.authType, email: refreshed.email, planType: refreshed.planType };
+      }
     }
 
     this.accountCache = {
@@ -385,7 +440,7 @@ class CodexAppServerClient {
     const status = await this.accountStatus();
     if (!status.connected) {
       const hint = process.env.NODE_ENV === "production"
-        ? "Pastikan CODEX_ACCESS_TOKEN dari workspace ChatGPT Business tersedia."
+        ? "Admin perlu menghubungkan ulang ChatGPT Business atau memeriksa kredensial terenkripsi pada Private Blob."
         : "Jalankan `codex login` atau isi CODEX_ACCESS_TOKEN.";
       throw new Error(`Codex CLI belum terhubung dengan akun ChatGPT. ${hint}`);
     }

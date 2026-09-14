@@ -127,6 +127,18 @@ export async function approvedApiGuard() {
   return null;
 }
 
+export async function getCurrentAdminSession() {
+  const session = await getCurrentSession();
+  if (!session || session.profile.status !== "approved") return null;
+  return session.profile.role === "admin" || isAdminEmail(session.profile.email) ? session : null;
+}
+
+export async function adminApiGuard() {
+  return await getCurrentAdminSession()
+    ? null
+    : NextResponse.json({ message: "Akses admin diperlukan." }, { status: 403 });
+}
+
 export function isSameOriginRequest(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return true;

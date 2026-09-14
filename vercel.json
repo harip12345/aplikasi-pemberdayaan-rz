@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/assistant/auth-refresh",
+      "schedule": "15 0 * * *"
+    }
+  ]
+}

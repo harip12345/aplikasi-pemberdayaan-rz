@@ -5,7 +5,7 @@ import { AlertCircle, Bot, CheckCircle2, Copy, Database, ExternalLink, Loader2, 
 
 type SourceLink = { label: string; url: string; updatedAt: string };
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; sources?: SourceLink[]; usedTools?: string[] };
-type ProviderStatus = { label?: string; model?: string; connected: boolean; loginAvailable?: boolean; planType?: string | null; message?: string };
+type ProviderStatus = { label?: string; model?: string; connected: boolean; loginAvailable?: boolean; canManageLogin?: boolean; planType?: string | null; message?: string };
 type LoginCode = { verificationUrl: string; userCode: string };
 type LoginEvent = { type: "code"; verificationUrl: string; userCode: string } | { type: "complete"; connected: true; planType?: string | null } | { type: "error"; message: string };
 
@@ -36,7 +36,6 @@ export function SmartAssistant() {
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loginSecret, setLoginSecret] = useState("");
   const [loginCode, setLoginCode] = useState<LoginCode | null>(null);
   const [loginState, setLoginState] = useState<"idle" | "starting" | "waiting">("idle");
   const [telegramUrl, setTelegramUrl] = useState<string | null>(null);
@@ -71,12 +70,11 @@ export function SmartAssistant() {
   }, [isOpen, status]);
 
   const connectChatGPT = async () => {
-    if (!loginSecret.trim() || loginState !== "idle") return;
+    if (loginState !== "idle") return;
     setError(null); setLoginCode(null); setLoginState("starting");
     try {
       const response = await fetch("/api/assistant/login", {
         method: "POST",
-        headers: { "x-rz-login-secret": loginSecret.trim() },
         cache: "no-store",
       });
       if (!response.ok) {
@@ -116,7 +114,7 @@ export function SmartAssistant() {
       const statusResponse = await fetch("/api/assistant/status", { cache: "no-store" });
       const nextStatus = await statusResponse.json() as ProviderStatus;
       if (!statusResponse.ok || !nextStatus.connected) throw new Error(nextStatus.message || "Akun belum terbaca setelah login.");
-      setStatus(nextStatus); setLoginSecret(""); setLoginCode(null);
+      setStatus(nextStatus); setLoginCode(null);
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Login ChatGPT tidak berhasil.");
     } finally {
@@ -170,16 +168,15 @@ export function SmartAssistant() {
             </div>
             {status?.connected === false && status.loginAvailable && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center gap-2 text-slate-700"><LogIn size={15} /><p className="text-xs font-bold">Hubungkan ChatGPT Business</p></div>
-              {!loginCode ? <div className="mt-2 flex gap-2">
-                <input type="password" value={loginSecret} onChange={(event) => setLoginSecret(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void connectChatGPT(); }} placeholder="Secret admin login" autoComplete="off" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-orange-300" />
-                <button type="button" onClick={() => void connectChatGPT()} disabled={!loginSecret.trim() || loginState !== "idle"} className="rounded-xl bg-[#D84315] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{loginState === "starting" ? <Loader2 size={15} className="animate-spin" /> : "Login"}</button>
+              {!loginCode ? <div className="mt-2">
+                <p className="text-[11px] leading-4 text-slate-500">Akses ini hanya tersedia untuk admin aplikasi. Kredensial akan disimpan terenkripsi di Private Blob.</p>
+                <button type="button" onClick={() => void connectChatGPT()} disabled={loginState !== "idle"} className="mt-2 flex w-full items-center justify-center rounded-xl bg-[#D84315] px-3 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{loginState === "starting" ? <Loader2 size={15} className="animate-spin" /> : "Hubungkan ChatGPT Business"}</button>
               </div> : <div className="mt-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-center">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Kode sekali pakai</p>
                 <div className="mt-1 flex items-center justify-center gap-2"><strong className="font-mono text-lg tracking-wider text-slate-900">{loginCode.userCode}</strong><button type="button" onClick={() => void navigator.clipboard.writeText(loginCode.userCode)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white" aria-label="Salin kode"><Copy size={14} /></button></div>
                 <a href={loginCode.verificationUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#172436] px-3 py-2 text-xs font-semibold text-white"><ExternalLink size={12} /> Buka halaman login</a>
                 <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-500"><Loader2 size={11} className="animate-spin" /> Menunggu konfirmasi login…</p>
               </div>}
-              <p className="mt-2 text-[10px] leading-4 text-slate-400">Kredensial tidak dikirim ke browser dan disimpan terenkripsi pada Private Blob.</p>
             </div>}
             {telegramUrl && <a href={telegramUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-[#229ED9] px-3 py-2.5 text-xs font-bold text-white transition hover:bg-[#168AC0]"><Send size={14} /> Akses melalui bot Telegram</a>}
           </div>
