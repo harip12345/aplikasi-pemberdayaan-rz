@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { configuredCodexModel } from "@/lib/ai-providers";
-import { isCodexAuthPersistenceConfigured, persistCodexAuth, preparePersistentCodexHome, syncPersistentCodexAuth } from "@/lib/codex-auth-storage";
+import { isCodexAuthPersistenceConfigured, persistCodexAuth, preparePersistentCodexHome, restorePersistentCodexAuth, syncPersistentCodexAuth } from "@/lib/codex-auth-storage";
 
 type JsonRecord = Record<string, unknown>;
 type DynamicTool = { type: "function"; name: string; description: string; inputSchema: JsonRecord };
@@ -31,6 +31,7 @@ type LoginWaiter = {
 const REQUEST_TIMEOUT_MS = 30_000;
 const TURN_TIMEOUT_MS = Number(process.env.CODEX_TURN_TIMEOUT_MS || 120_000);
 const ACCOUNT_CACHE_MS = 10 * 60 * 1000;
+const DISCONNECTED_ACCOUNT_CACHE_MS = 5_000;
 const moduleRequire = createRequire(import.meta.url);
 
 function record(value: unknown): JsonRecord | null {
@@ -124,6 +125,7 @@ class CodexAppServerClient {
   private lastAuthSyncAt = 0;
   private authRestartNeeded = false;
   private accountCache: { value: { connected: boolean; authType: string | null; email: string | null; planType: string | null }; expiresAt: number } | null = null;
+  private accountStatusPromise: Promise<{ connected: boolean; authType: string | null; email: string | null; planType: string | null }> | null = null;
 
   private send(message: JsonRecord) {
     if (!this.process?.stdin.writable) throw new Error("Proses Codex App Server tidak aktif.");
@@ -247,6 +249,20 @@ class CodexAppServerClient {
     this.accountCache = null;
   }
 
+  private async restartForRestoredAuth() {
+    const child = this.process;
+    this.process = null;
+    this.starting = null;
+    this.authRestartNeeded = false;
+    this.accountCache = null;
+    if (!child || child.killed) return;
+    child.kill();
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 1_000);
+      child.once("exit", () => { clearTimeout(timer); resolve(); });
+    });
+  }
+
   async ensureStarted() {
     if (this.process && !this.process.killed) return;
     if (this.starting) return this.starting;
@@ -292,20 +308,43 @@ class CodexAppServerClient {
     await this.syncPersistentAuth();
     await this.ensureStarted();
     if (this.accountCache && this.accountCache.expiresAt > Date.now()) return this.accountCache.value;
+    if (this.accountStatusPromise) return this.accountStatusPromise;
+    this.accountStatusPromise = this.readAndPersistAccountStatus();
+    try {
+      return await this.accountStatusPromise;
+    } finally {
+      this.accountStatusPromise = null;
+    }
+  }
+
+  private async readAndPersistAccountStatus() {
     // Telegram and other server-to-server callers do not have a browser session
     // available to refresh an expired ChatGPT access token. Ask App Server to
     // refresh it during every uncached account check so a cold invocation is
     // self-sufficient.
-    const result = record(await this.request("account/read", { refreshToken: true }));
-    const account = record(result?.account);
-    const value = {
-      connected: account?.type === "chatgpt",
-      authType: typeof account?.type === "string" ? account.type : null,
-      email: typeof account?.email === "string" ? account.email : null,
-      planType: typeof account?.planType === "string" ? account.planType : null,
+    const readAccount = async () => {
+      const result = record(await this.request("account/read", { refreshToken: true }));
+      const account = record(result?.account);
+      return {
+        connected: account?.type === "chatgpt",
+        authType: typeof account?.type === "string" ? account.type : null,
+        email: typeof account?.email === "string" ? account.email : null,
+        planType: typeof account?.planType === "string" ? account.planType : null,
+      };
     };
-    this.accountCache = { value, expiresAt: Date.now() + ACCOUNT_CACHE_MS };
-    await persistCodexAuth().catch((error) => console.error("Gagal menyinkronkan autentikasi Codex:", error instanceof Error ? error.message : error));
+
+    let value = await readAccount();
+    if (!value.connected && isCodexAuthPersistenceConfigured() && await restorePersistentCodexAuth()) {
+      await this.restartForRestoredAuth();
+      await this.ensureStarted();
+      value = await readAccount();
+    }
+
+    this.accountCache = {
+      value,
+      expiresAt: Date.now() + (value.connected ? ACCOUNT_CACHE_MS : DISCONNECTED_ACCOUNT_CACHE_MS),
+    };
+    await persistCodexAuth({ waitForChangeMs: 750 }).catch((error) => console.error("Gagal menyinkronkan autentikasi Codex:", error instanceof Error ? error.message : error));
     return value;
   }
 
@@ -396,4 +435,4 @@ class CodexAppServerClient {
 
 const globalWithCodex = globalThis as typeof globalThis & { __rzCodexAppServerV2?: CodexAppServerClient };
 export const codexAppServer = globalWithCodex.__rzCodexAppServerV2 ?? new CodexAppServerClient();
-if (process.env.NODE_ENV !== "production") globalWithCodex.__rzCodexAppServerV2 = codexAppServer;
+globalWithCodex.__rzCodexAppServerV2 = codexAppServer;

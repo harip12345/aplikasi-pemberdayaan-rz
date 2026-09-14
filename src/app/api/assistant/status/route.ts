@@ -21,7 +21,7 @@ export async function GET() {
         loginAvailable,
         planType: account.planType,
         message: account.connected
-          ? "Terhubung melalui workspace ChatGPT."
+          ? "Terhubung melalui workspace ChatGPT. Sesi login tersimpan terenkripsi."
           : loginAvailable
             ? "Codex belum terhubung. Gunakan login ChatGPT Business di bawah."
             : process.env.NODE_ENV === "production"

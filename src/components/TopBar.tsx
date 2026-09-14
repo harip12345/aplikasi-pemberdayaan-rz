@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BarChart3, Home, MapPinned, Menu, Users, X } from "lucide-react";
+import { UserMenu } from "@/components/UserMenu";
 
 function RumahZakatMark() {
   return (
@@ -61,7 +62,9 @@ export function TopBar() {
           })}
         </nav>
 
-        <button onClick={() => setOpenMobile(!openMobile)} className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white lg:hidden">
+        <UserMenu />
+
+        <button onClick={() => setOpenMobile(!openMobile)} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white lg:hidden">
           {openMobile ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>

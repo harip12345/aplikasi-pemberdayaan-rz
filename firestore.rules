@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Seluruh data profil dikelola oleh API server melalui Firebase Admin SDK.
+    // Browser tidak memiliki akses langsung ke koleksi Firestore.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
