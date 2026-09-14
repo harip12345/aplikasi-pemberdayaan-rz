@@ -1,15 +1,18 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BarChart3, Bot, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, UserPlus, Users } from "lucide-react";
 import {
   createUserWithEmailAndPassword,
+  getRedirectResult,
   GoogleAuthProvider,
   sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
+  type Auth,
   updateProfile,
 } from "firebase/auth";
 import { createFirebaseBrowserAuth } from "@/lib/firebase/client";
@@ -41,6 +44,19 @@ function GoogleMark() {
       <path fill="#EA4335" d="M12 5.94c1.47 0 2.79.51 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.93 5.44l3.33 2.62c.79-2.36 3-4.12 5.6-4.12Z" />
     </svg>
   );
+}
+
+async function establishSession(idToken: string) {
+  const response = await fetch("/api/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) throw new Error("Layanan login server belum tersedia. Silakan coba kembali setelah deployment selesai.");
+  const payload = await response.json() as { message?: string; status?: string };
+  if (!response.ok) throw new Error(payload.message || "Sesi login tidak dapat dibuat.");
+  return payload.status;
 }
 
 function OnboardingBackdrop() {
@@ -90,24 +106,42 @@ export function AuthForm() {
   const [purpose, setPurpose] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [googleAuth, setGoogleAuth] = useState<Auth | null>(null);
   const [message, setMessage] = useState(searchParams.get("error") ?? "");
   const [success, setSuccess] = useState(false);
   const internal = useMemo(() => email.trim().toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`), [email]);
   const requestedNext = searchParams.get("next");
   const safeNext = requestedNext?.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/";
 
-  async function establishSession(idToken: string) {
-    const response = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
-    });
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) throw new Error("Layanan login server belum tersedia. Silakan coba kembali setelah deployment selesai.");
-    const payload = await response.json() as { message?: string; status?: string };
-    if (!response.ok) throw new Error(payload.message || "Sesi login tidak dapat dibuat.");
-    return payload.status;
-  }
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const auth = await createFirebaseBrowserAuth();
+        const redirectCredential = await getRedirectResult(auth);
+        if (!active) return;
+        if (!redirectCredential) {
+          setGoogleAuth(auth);
+          return;
+        }
+
+        setBusy(true);
+        const status = await establishSession(await redirectCredential.user.getIdToken(true));
+        await signOut(auth);
+        window.location.assign(status === "pending" ? "/auth/pending" : status === "approved" ? safeNext : "/auth/access-denied");
+      } catch (error) {
+        if (!active) return;
+        setMessage(authError(error, "Login Google tidak berhasil."));
+        setBusy(false);
+        try {
+          setGoogleAuth(await createFirebaseBrowserAuth());
+        } catch {
+          // Pesan inisialisasi sebelumnya sudah cukup untuk pengguna.
+        }
+      }
+    })();
+    return () => { active = false; };
+  }, [safeNext]);
 
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
@@ -161,16 +195,32 @@ export function AuthForm() {
   }
 
   async function signInWithGoogle() {
+    if (!googleAuth) {
+      setMessage("Layanan Login Google sedang disiapkan. Silakan coba kembali sebentar lagi.");
+      return;
+    }
     setBusy(true); setMessage(""); setSuccess(false);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
     try {
-      const auth = await createFirebaseBrowserAuth();
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      const credential = await signInWithPopup(auth, provider);
+      // Harus dipanggil langsung dari event klik. Safari akan memblokir popup jika
+      // ada operasi async lain sebelum pemanggilan signInWithPopup.
+      const credential = await signInWithPopup(googleAuth, provider);
       const status = await establishSession(await credential.user.getIdToken(true));
-      await signOut(auth);
+      await signOut(googleAuth);
       window.location.assign(status === "pending" ? "/auth/pending" : status === "approved" ? safeNext : "/auth/access-denied");
     } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (code === "auth/popup-blocked") {
+        try {
+          await signInWithRedirect(googleAuth, provider);
+          return;
+        } catch (redirectError) {
+          setMessage(authError(redirectError, "Login Google melalui pengalihan halaman tidak berhasil."));
+          setBusy(false);
+          return;
+        }
+      }
       setMessage(authError(error, "Login Google tidak berhasil."));
       setBusy(false);
     }
@@ -219,7 +269,7 @@ export function AuthForm() {
             </form>
 
             <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" /> atau <span className="h-px flex-1 bg-slate-200" /></div>
-            <button type="button" disabled={busy} onClick={() => void signInWithGoogle()} className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-[#172436] transition hover:border-orange-200 hover:bg-orange-50/40 disabled:opacity-60"><GoogleMark /> Lanjutkan dengan Google</button>
+            <button type="button" disabled={busy || !googleAuth} onClick={() => void signInWithGoogle()} className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-[#172436] transition hover:border-orange-200 hover:bg-orange-50/40 disabled:cursor-wait disabled:opacity-60"><GoogleMark /> {googleAuth ? "Lanjutkan dengan Google" : "Menyiapkan Login Google…"}</button>
             <div className="mt-5 flex rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="Pilih login atau daftar">
               <button type="button" onClick={() => switchMode("sign-in")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${mode === "sign-in" ? "bg-white text-[#D84315] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Masuk</button>
               <button type="button" onClick={() => switchMode("sign-up")} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${mode === "sign-up" ? "bg-white text-[#D84315] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>Daftar</button>
