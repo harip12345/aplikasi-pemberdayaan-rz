@@ -60,6 +60,8 @@ export function AuthForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken }),
     });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) throw new Error("Layanan login server belum tersedia. Silakan coba kembali setelah deployment selesai.");
     const payload = await response.json() as { message?: string; status?: string };
     if (!response.ok) throw new Error(payload.message || "Sesi login tidak dapat dibuat.");
     return payload.status;
@@ -102,6 +104,7 @@ export function AuthForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken, fullName: fullName.trim(), organization: organization.trim(), purpose: purpose.trim() }),
       });
+      if (!(registerResponse.headers.get("content-type") ?? "").includes("application/json")) throw new Error("Layanan pendaftaran server belum tersedia.");
       const registerPayload = await registerResponse.json() as { message?: string };
       if (!registerResponse.ok) throw new Error(registerPayload.message || "Profil pengguna tidak dapat dibuat.");
       await sendEmailVerification(credential.user, { url: `${window.location.origin}/auth/sign-in?verified=1` });
