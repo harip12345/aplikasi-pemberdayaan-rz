@@ -38,8 +38,8 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
     spreadsheetId: "1W0M9WD1Zk_r1F77vP1ccDivV5UQVrJbnUnursadoX8U",
     gid: "722479198",
     environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ANALYSIS_ID", gid: "GOOGLE_SHEETS_PP_ANALYSIS_GID" },
-    parser: "participant-achievement-analysis-v2",
-    grain: "Satu baris ringkasan capaian per kelompok program",
+    parser: "participant-achievement-analysis-v3",
+    grain: "Ringkasan PP dan PLP per program serta per divisi; kolom periode berjalan dikecualikan",
     refreshMode: "cached-google-sheet",
   },
   distribution: {

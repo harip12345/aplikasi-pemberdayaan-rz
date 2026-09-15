@@ -1,34 +1,14 @@
 import { resolvedDataSource } from "@/lib/data-catalog";
 import { fetchGoogleSheetCsv } from "@/lib/google-sheets-fetch";
-import { getParticipantSheetData, PARTICIPANT_MONTHS } from "@/lib/participant-sheets";
 
-export type ParticipantAnalysisRow = {
-  program: string;
-  annualTarget: number;
-  annualAchievement: number;
-  annualHistory: number;
-  annualAchievementRate: number;
-  annualGrowthRate: number;
-  runningTarget: number;
-  runningAchievement: number;
-  comparableHistory: number;
-  runningAchievementRate: number;
-  runningGrowthRate: number;
-};
-
-export type ParticipantAnalysisTotals = Omit<ParticipantAnalysisRow, "program">;
-
-export type ParticipantDivisionAnalysisRow = ParticipantAnalysisTotals & { division: string };
-
+export type AchievementAnalysis = { target: number; achievement: number; history: number; achievementRate: number; growthRate: number };
+export type ParticipantAnalysisRow = { program: string; pp: AchievementAnalysis; plp: AchievementAnalysis };
+export type ParticipantDivisionAnalysisRow = { division: string; divisionLabel: string; pp: AchievementAnalysis; plp: AchievementAnalysis };
 export type ParticipantAnalysisData = {
   rows: ParticipantAnalysisRow[];
   divisions: ParticipantDivisionAnalysisRow[];
-  totals: ParticipantAnalysisTotals;
-  startMonthIndex: number;
-  endMonthIndex: number;
-  periodMatched: boolean;
+  totals: { pp: AchievementAnalysis; plp: AchievementAnalysis };
   year: number;
-  months: readonly string[];
   updatedAt: string;
   source: "Google Sheets";
   sourceUrl: string;
@@ -61,105 +41,65 @@ function numberValue(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function ratio(numerator: number, denominator: number) {
-  return denominator > 0 ? ((numerator - denominator) / denominator) * 100 : 0;
-}
-
-function achievementRate(achievement: number, target: number) {
-  return target > 0 ? (achievement / target) * 100 : 0;
-}
-
-function totals(rows: ParticipantAnalysisRow[]): ParticipantAnalysisTotals {
-  const summed = rows.reduce((result, row) => ({
-    annualTarget: result.annualTarget + row.annualTarget,
-    annualAchievement: result.annualAchievement + row.annualAchievement,
-    annualHistory: result.annualHistory + row.annualHistory,
-    runningTarget: result.runningTarget + row.runningTarget,
-    runningAchievement: result.runningAchievement + row.runningAchievement,
-    comparableHistory: result.comparableHistory + row.comparableHistory,
-  }), { annualTarget: 0, annualAchievement: 0, annualHistory: 0, runningTarget: 0, runningAchievement: 0, comparableHistory: 0 });
+function metric(target: string, achievement: string, history: string): AchievementAnalysis {
+  const targetValue = numberValue(target);
+  const achievementValue = numberValue(achievement);
+  const historyValue = numberValue(history);
   return {
-    ...summed,
-    annualAchievementRate: achievementRate(summed.annualAchievement, summed.annualTarget),
-    annualGrowthRate: ratio(summed.annualAchievement, summed.annualHistory),
-    runningAchievementRate: achievementRate(summed.runningAchievement, summed.runningTarget),
-    runningGrowthRate: ratio(summed.runningAchievement, summed.comparableHistory),
+    target: targetValue,
+    achievement: achievementValue,
+    history: historyValue,
+    achievementRate: targetValue > 0 ? (achievementValue / targetValue) * 100 : 0,
+    growthRate: historyValue > 0 ? ((achievementValue - historyValue) / historyValue) * 100 : 0,
   };
+}
+
+function totalMetric(metrics: AchievementAnalysis[]): AchievementAnalysis {
+  const target = metrics.reduce((sum, item) => sum + item.target, 0);
+  const achievement = metrics.reduce((sum, item) => sum + item.achievement, 0);
+  const history = metrics.reduce((sum, item) => sum + item.history, 0);
+  return {
+    target,
+    achievement,
+    history,
+    achievementRate: target > 0 ? (achievement / target) * 100 : 0,
+    growthRate: history > 0 ? ((achievement - history) / history) * 100 : 0,
+  };
+}
+
+function expandedDivisionLabel(value: string) {
+  if (/^dist\s*div$/i.test(value)) return "Distribution Division";
+  if (/^empo\s*div$/i.test(value)) return "Empowerment Division";
+  if (/^dakwah\s*div$/i.test(value)) return "Dakwah Division";
+  if (/^project\s*div$/i.test(value)) return "Project Division";
+  if (/^humdiv$/i.test(value)) return "Humanitarian Division";
+  return value;
 }
 
 export async function getParticipantAnalysisData(): Promise<ParticipantAnalysisData> {
   const { spreadsheetId, gid } = resolvedDataSource("participant-analysis");
   const sourceUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${gid}#gid=${gid}`;
-  const [csv, participants] = await Promise.all([
-    fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`),
-    getParticipantSheetData(),
-  ]);
-  const [, ...rawRows] = parseCsv(csv.replace(/^\uFEFF/, ""));
+  const csv = await fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`);
+  const [header = [], ...rawRows] = parseCsv(csv.replace(/^\uFEFF/, ""));
+
+  // Kolom biru muda (6-10 dan 23-27) sengaja tidak dibaca.
   const rows = rawRows.flatMap((row): ParticipantAnalysisRow[] => {
     const program = (row[0] ?? "").trim();
-    if (!program || !row.slice(1, 11).some(Boolean)) return [];
-    const annualTarget = numberValue(row[1] ?? "");
-    const annualAchievement = numberValue(row[2] ?? "");
-    const annualHistory = numberValue(row[4] ?? "");
-    const runningTarget = numberValue(row[6] ?? "");
-    const runningAchievement = numberValue(row[7] ?? "");
-    const comparableHistory = numberValue(row[9] ?? "");
-    return [{
-      program,
-      annualTarget,
-      annualAchievement,
-      annualHistory,
-      annualAchievementRate: achievementRate(annualAchievement, annualTarget),
-      annualGrowthRate: ratio(annualAchievement, annualHistory),
-      runningTarget,
-      runningAchievement,
-      comparableHistory,
-      runningAchievementRate: achievementRate(runningAchievement, runningTarget),
-      runningGrowthRate: ratio(runningAchievement, comparableHistory),
-    }];
+    if (!program || !row.slice(1, 6).some(Boolean)) return [];
+    return [{ program, pp: metric(row[1] ?? "", row[2] ?? "", row[4] ?? ""), plp: metric(row[11] ?? "", row[12] ?? "", row[14] ?? "") }];
   });
-  if (!rows.length) throw new Error("Struktur sheet Analisa Capaian Peserta Program tidak dikenali.");
-
   const divisions = rawRows.flatMap((row): ParticipantDivisionAnalysisRow[] => {
     const division = (row[17] ?? "").trim();
-    if (!division || !row.slice(18, 28).some(Boolean)) return [];
-    const annualTarget = numberValue(row[18] ?? "");
-    const annualAchievement = numberValue(row[19] ?? "");
-    const annualHistory = numberValue(row[21] ?? "");
-    const runningTarget = numberValue(row[23] ?? "");
-    const runningAchievement = numberValue(row[24] ?? "");
-    const comparableHistory = numberValue(row[26] ?? "");
-    return [{
-      division,
-      annualTarget,
-      annualAchievement,
-      annualHistory,
-      annualAchievementRate: achievementRate(annualAchievement, annualTarget),
-      annualGrowthRate: ratio(annualAchievement, annualHistory),
-      runningTarget,
-      runningAchievement,
-      comparableHistory,
-      runningAchievementRate: achievementRate(runningAchievement, runningTarget),
-      runningGrowthRate: ratio(runningAchievement, comparableHistory),
-    }];
+    if (!division || !row.slice(18, 23).some(Boolean)) return [];
+    return [{ division, divisionLabel: expandedDivisionLabel(division), pp: metric(row[18] ?? "", row[19] ?? "", row[21] ?? ""), plp: metric(row[28] ?? "", row[29] ?? "", row[31] ?? "") }];
   });
-
-  const summary = totals(rows);
-  const participantMonthTotals = Array.from({ length: 12 }, (_, endMonthIndex) => participants.rows
-    .filter((row) => row.year === participants.year && row.monthIndex <= endMonthIndex)
-    .reduce((sum, row) => sum + row.total, 0));
-  const exactMonthIndex = participantMonthTotals.findIndex((value) => value === summary.runningAchievement);
-  const endMonthIndex = exactMonthIndex >= 0 ? exactMonthIndex : participants.latestMonthIndex;
-
+  if (!rows.length || !divisions.length) throw new Error("Struktur sheet Analisa Capaian PP dan PLP tidak dikenali.");
+  const year = Number(header.join(" ").match(/\b(20\d{2})\b/)?.[1]) || new Date().getFullYear();
   return {
     rows,
     divisions,
-    totals: summary,
-    startMonthIndex: 0,
-    endMonthIndex,
-    periodMatched: exactMonthIndex >= 0,
-    year: participants.year,
-    months: PARTICIPANT_MONTHS,
+    totals: { pp: totalMetric(rows.map((row) => row.pp)), plp: totalMetric(rows.map((row) => row.plp)) },
+    year,
     updatedAt: new Date().toISOString(),
     source: "Google Sheets",
     sourceUrl,

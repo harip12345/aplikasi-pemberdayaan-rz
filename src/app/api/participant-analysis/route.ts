@@ -6,7 +6,7 @@ import { getServerCachedData, isForcedDataRefresh } from "@/lib/server-data-cach
 export async function GET(request: Request) {
   const denied = await approvedApiGuard(); if (denied) return denied;
   try {
-    const data = await getServerCachedData("participant-analysis-v2", getParticipantAnalysisData, isForcedDataRefresh(request));
+    const data = await getServerCachedData("participant-analysis-v3", getParticipantAnalysisData, isForcedDataRefresh(request));
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Gagal membaca Analisa Capaian Peserta Program:", error);
