@@ -1,4 +1,4 @@
-export type AiDataSourceId = "dashboard" | "participants" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact";
+export type AiDataSourceId = "dashboard" | "participants" | "participant-analysis" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact";
 
 export type DataSourceDefinition = {
   id: AiDataSourceId;
@@ -30,6 +30,16 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
     environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ID", gid: "GOOGLE_SHEETS_PP_GID" },
     parser: "participant-row-v1",
     grain: "Satu baris penyaluran per periode, wilayah, program, subprogram, dan asnaf",
+    refreshMode: "cached-google-sheet",
+  },
+  "participant-analysis": {
+    id: "participant-analysis",
+    label: "Analisa Capaian Peserta Program",
+    spreadsheetId: "1W0M9WD1Zk_r1F77vP1ccDivV5UQVrJbnUnursadoX8U",
+    gid: "722479198",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ANALYSIS_ID", gid: "GOOGLE_SHEETS_PP_ANALYSIS_GID" },
+    parser: "participant-achievement-analysis-v2",
+    grain: "Satu baris ringkasan capaian per kelompok program",
     refreshMode: "cached-google-sheet",
   },
   distribution: {

@@ -31,3 +31,34 @@ a {
   min-height: 540px;
   border-radius: 24px;
 }
+
+@keyframes analysis-cta-sweep {
+  0%, 42% { transform: translateX(-170%) skewX(-18deg); }
+  72%, 100% { transform: translateX(240%) skewX(-18deg); }
+}
+
+@keyframes analysis-cta-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.analysis-cta::after {
+  content: "";
+  position: absolute;
+  inset: -35% auto -35% 0;
+  width: 32%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: analysis-cta-sweep 3.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.analysis-cta-icon {
+  animation: analysis-cta-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-cta::after,
+  .analysis-cta-icon {
+    animation: none;
+  }
+}

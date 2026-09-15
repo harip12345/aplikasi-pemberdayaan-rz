@@ -2,15 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Download, Eye, EyeOff, FileDown, FileSpreadsheet, Filter, RefreshCw, RotateCcw, Search } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, BarChart3, Download, Eye, EyeOff, FileDown, FileSpreadsheet, Filter, RefreshCw, RotateCcw, Search, TrendingDown } from "lucide-react";
 import type { SheetData } from "write-excel-file/browser";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import { ASNAF_FIELDS, type AsnafField, type ParticipantRow, type ParticipantSheetData } from "@/lib/participant-sheets";
+import type { ParticipantAnalysisData } from "@/lib/participant-analysis";
 import { useReportingPeriod } from "@/components/ReportingPeriodContext";
 
 const ALL = "Semua";
 const ParticipantCharts = dynamic(() => import("@/components/ParticipantCharts").then((module) => module.ParticipantCharts), { loading: () => <div className="h-[330px] animate-pulse rounded-[26px] bg-slate-100 xl:col-span-2" /> });
 const DEFAULT_MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli"];
+const ANALYSIS_CACHE_KEY = "participant-analysis-v2";
 type Filters = { startMonthIndex: number; endMonthIndex: number; province: string; city: string; branch: string; program: string; subProgram: string; query: string };
 type ReportRow = Record<AsnafField, number> & { program: string; subProgram: string; total: number; kind: "detail" | "subtotal" | "grand" };
 type BranchReportRow = Record<AsnafField, number> & { branch: string; program: string; total: number; kind: "detail" | "subtotal" | "grand" };
@@ -146,6 +149,7 @@ export function ParticipantOverview() {
   const { setPeriod: setAssistantPeriod } = useReportingPeriod();
   const cachedParticipants = getCachedJsonSnapshot<ParticipantSheetData>("participants-sheet-v1");
   const [data, setData] = useState<ParticipantSheetData | null>(cachedParticipants);
+  const [analysis, setAnalysis] = useState<ParticipantAnalysisData | null>(() => getCachedJsonSnapshot<ParticipantAnalysisData>(ANALYSIS_CACHE_KEY));
   const [isLoading, setIsLoading] = useState(!cachedParticipants);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({ startMonthIndex: 0, endMonthIndex: cachedParticipants?.latestMonthIndex ?? 6, province: ALL, city: ALL, branch: ALL, program: ALL, subProgram: ALL, query: "" });
@@ -155,7 +159,14 @@ export function ParticipantOverview() {
   const acceptData = (nextData: ParticipantSheetData) => { setData(nextData); setFilters((current) => ({ ...current, startMonthIndex: 0, endMonthIndex: nextData.latestMonthIndex })); };
   const loadData = async (forceRefresh = true) => {
     setIsLoading(true); setLoadError(null);
-    try { acceptData(await fetchCachedJson<ParticipantSheetData>("participants-sheet-v1", "/api/participants", forceRefresh)); }
+    try {
+      const [participants, analysisResult] = await Promise.all([
+        fetchCachedJson<ParticipantSheetData>("participants-sheet-v1", "/api/participants", forceRefresh),
+        fetchCachedJson<ParticipantAnalysisData>(ANALYSIS_CACHE_KEY, "/api/participant-analysis", forceRefresh).catch(() => analysis),
+      ]);
+      acceptData(participants);
+      if (analysisResult) setAnalysis(analysisResult);
+    }
     catch (error) { setLoadError(error instanceof Error ? error.message : "Data Peserta Program tidak dapat dimuat."); }
     finally { setIsLoading(false); }
   };
@@ -166,6 +177,14 @@ export function ParticipantOverview() {
       .then((nextData) => { if (!cancelled) { setData(nextData); setFilters((current) => ({ ...current, startMonthIndex: 0, endMonthIndex: nextData.latestMonthIndex })); } })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Data Peserta Program tidak dapat dimuat."); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCachedJson<ParticipantAnalysisData>(ANALYSIS_CACHE_KEY, "/api/participant-analysis")
+      .then((nextData) => { if (!cancelled) setAnalysis(nextData); })
+      .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
 
@@ -200,6 +219,9 @@ export function ParticipantOverview() {
   }), [rows]);
   const lastDay = new Date(year, filters.endMonthIndex + 1, 0).getDate();
   const periodLabel = data ? `1 ${months[filters.startMonthIndex]} ${year} - ${lastDay} ${months[filters.endMonthIndex]} ${year}` : "";
+  const annualTargetRate = analysis?.totals.annualAchievementRate ?? null;
+  const annualGrowthRate = analysis?.totals.annualGrowthRate ?? null;
+  const hasScopedFilter = filters.province !== ALL || filters.city !== ALL || filters.branch !== ALL || filters.program !== ALL || filters.subProgram !== ALL || Boolean(filters.query.trim());
   const activeExportFilters = useMemo(() => [
     { label: "Provinsi", value: filters.province },
     { label: "Kota/Kab", value: filters.city },
@@ -268,7 +290,7 @@ export function ParticipantOverview() {
 
   return <section className="space-y-6">
     <div className="overflow-hidden rounded-[30px] bg-white shadow-soft">
-      <div className="flex flex-col gap-5 bg-gradient-to-br from-[#0D1B2A] via-[#1B263B] to-[#32415B] p-6 text-white lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-semibold text-white/65">Ikhtisar Peserta Program</p><h1 className="mt-1 text-3xl font-bold">Dashboard Peserta Program{data ? ` ${year}` : ""}</h1><p className="mt-2 text-sm text-white/70">Data langsung dari Google Sheets dan mengikuti filter aktif.</p></div><div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-sm"><p className="text-xs uppercase text-white/55">Periode laporan</p><p className="mt-1 min-h-6 font-semibold">{periodLabel}</p></div></div>
+      <div className="flex flex-col gap-5 bg-gradient-to-br from-[#0D1B2A] via-[#1B263B] to-[#32415B] p-6 text-white lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-semibold text-white/65">Ikhtisar Peserta Program</p><h1 className="mt-1 text-3xl font-bold">Dashboard Peserta Program{data ? ` ${year}` : ""}</h1><p className="mt-2 text-sm text-white/70">Data langsung dari Google Sheets dan mengikuti filter aktif.</p></div><div className="flex flex-col gap-3 sm:flex-row sm:items-stretch"><Link href="/analisa-capaian-pp" className="analysis-cta group relative flex min-w-[230px] items-center gap-3 overflow-hidden rounded-2xl border border-orange-300/70 bg-[#0A1322] px-4 py-3 text-white shadow-[0_12px_32px_rgba(0,0,0,0.32)] ring-1 ring-orange-400/50 transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-[0_16px_38px_rgba(0,0,0,0.42)]"><span className="analysis-cta-icon relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#F2662F] shadow-lg shadow-orange-950/30"><BarChart3 size={20} /></span><span className="relative min-w-0 flex-1"><span className="block text-sm font-extrabold">Analisa Capaian PP</span><span className="mt-0.5 block text-[10px] font-medium text-white/65">Target, growth, dan program</span></span><ArrowUpRight size={17} className="relative text-orange-300 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></Link><div className="min-w-[235px] rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-sm"><p className="text-xs uppercase text-white/55">Periode laporan</p><p className="mt-1 min-h-6 font-semibold">{periodLabel}</p></div></div></div>
     </div>
 
     <div className={`sticky top-20 z-40 border border-slate-200/80 bg-white/95 shadow-soft backdrop-blur-xl transition-all ${isFilterExpanded ? "w-full rounded-[24px] p-5" : "ml-auto w-fit rounded-[18px] p-2"}`}><div className={`flex flex-wrap items-center gap-3 ${isFilterExpanded ? "mb-4 justify-between" : "justify-end"}`}>{isFilterExpanded && <span className="flex items-center gap-2 text-sm font-semibold"><Filter size={17} className="text-[#F2662F]" /> Filter laporan</span>}<div className="flex flex-wrap items-center gap-2">{isFilterExpanded && <button onClick={reset} className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600"><RotateCcw size={15} /> Reset filter</button>}<button type="button" aria-expanded={isFilterExpanded} onClick={() => setIsFilterExpanded((current) => !current)} className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-[#D94F1E] hover:bg-orange-100">{isFilterExpanded ? <EyeOff size={15} /> : <Eye size={15} />} {isFilterExpanded ? "Sembunyikan filter" : "Tampilkan filter"}</button></div></div>
@@ -279,7 +301,7 @@ export function ParticipantOverview() {
     </div>
 
     <div className="grid gap-5 xl:grid-cols-[280px_1fr_1fr]">
-      <div className="flex min-h-[330px] flex-col items-center justify-center overflow-hidden rounded-[26px] bg-gradient-to-br from-[#E64A19] to-[#FF7A00] p-6 text-center text-white shadow-soft"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Capaian Peserta Program</p><p className="mt-4 min-h-[42px] text-[42px] font-bold leading-none tracking-tight">{isDataAvailable ? formatNumber(total) : ""}</p><p className="mt-2 min-h-4 text-xs font-medium text-white/80">{periodLabel ? `Periode ${periodLabel}` : ""}</p><p className="mt-6 text-xs font-semibold text-white/90">Penyaluran tersebar di</p><div className="mt-3 grid w-full grid-cols-3 gap-2"><CoverageMetric value={coverage.cities} label="Kota/Kab" isDataAvailable={isDataAvailable} /><CoverageMetric value={coverage.provinces} label="Provinsi" isDataAvailable={isDataAvailable} /><CoverageMetric value={coverage.branches} label="Kantor/Cabang" isDataAvailable={isDataAvailable} /></div></div>
+      <div className="flex min-h-[330px] flex-col items-center justify-center overflow-hidden rounded-[26px] bg-gradient-to-br from-[#E64A19] to-[#FF7A00] p-6 text-center text-white shadow-soft"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Capaian Peserta Program</p><p className="mt-4 min-h-[42px] text-[42px] font-bold leading-none tracking-tight">{isDataAvailable ? formatNumber(total) : ""}</p><p className="mt-2 min-h-4 text-xs font-medium text-white/80">{periodLabel ? `Periode ${periodLabel}` : ""}</p>{annualTargetRate !== null && annualGrowthRate !== null && analysis && <div className="mt-4 grid w-full grid-cols-2 gap-2"><div className="rounded-xl bg-white/14 px-2 py-2.5"><p className="text-base font-extrabold">{new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(annualTargetRate)}%</p><p className="mt-0.5 text-[9px] font-medium leading-3 text-white/75">dari target {formatNumber(analysis.totals.annualTarget)}</p></div><div className="rounded-xl bg-white/14 px-2 py-2.5"><p className="flex items-center justify-center gap-1 text-base font-extrabold text-red-100">{annualGrowthRate < 0 && <TrendingDown size={14} />}{annualGrowthRate >= 0 ? "+" : ""}{new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(annualGrowthRate)}%</p><p className="mt-0.5 text-[9px] font-medium leading-3 text-white/75">vs 2025 ({formatNumber(analysis.totals.annualHistory)})</p></div></div>}{hasScopedFilter && analysis && <p className="mt-1 text-[9px] text-white/60">Persentase target dan growth memakai acuan nasional.</p>}<p className="mt-5 text-xs font-semibold text-white/90">Penyaluran tersebar di</p><div className="mt-3 grid w-full grid-cols-3 gap-2"><CoverageMetric value={coverage.cities} label="Kota/Kab" isDataAvailable={isDataAvailable} /><CoverageMetric value={coverage.provinces} label="Provinsi" isDataAvailable={isDataAvailable} /><CoverageMetric value={coverage.branches} label="Kantor/Cabang" isDataAvailable={isDataAvailable} /></div></div>
       <ParticipantCharts programData={programSummary} asnafData={asnafChartData} />
     </div>
     <div className="rounded-[24px] border border-slate-300 bg-white p-5 shadow-soft">

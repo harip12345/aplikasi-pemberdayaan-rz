@@ -44,7 +44,7 @@ export function TopBar() {
 
         <nav className="ml-auto hidden items-center gap-1 lg:flex">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href;
+            const active = pathname === href || (href === "/ikhtisar-pp-plp" && pathname === "/analisa-capaian-pp");
             return (
               <Link
                 key={href}
@@ -73,7 +73,7 @@ export function TopBar() {
         <div className="border-t border-white/20 bg-[#D84315] px-4 pb-4 pt-3 lg:hidden">
           <nav className="flex flex-col gap-1">
             {navItems.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href;
+              const active = pathname === href || (href === "/ikhtisar-pp-plp" && pathname === "/analisa-capaian-pp");
               return (
                 <Link
                   key={href}
