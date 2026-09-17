@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const localRequest = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
   if (!localRequest) { const denied = await approvedApiGuard(); if (denied) return denied; }
   try {
-    const data = await getServerCachedData("participant-analysis-v6", getParticipantAnalysisData, isForcedDataRefresh(request));
+    const data = await getServerCachedData("participant-analysis-v7", getParticipantAnalysisData, isForcedDataRefresh(request));
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Gagal membaca Analisa Capaian Peserta Program:", error);

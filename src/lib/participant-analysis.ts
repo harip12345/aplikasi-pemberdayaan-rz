@@ -15,6 +15,8 @@ export type ParticipantMonthlyPoint = {
   growthRate: number;
   accumulatedTargetRate: number;
   accumulatedGrowthRate: number;
+  yearlyTargetRate: number;
+  yearlyGrowthRate: number;
 };
 export type ParticipantMonthlyGroup = { key: string; label: string; points: ParticipantMonthlyPoint[] };
 export type ParticipantAnalysisData = {
@@ -140,6 +142,9 @@ function parseMonthlyGroups(csv: string, keyColumn: number, label: (value: strin
       // Hanya dua kolom akumulasi ini yang digunakan. Nilai diambil sebagai snapshot bulan akhir.
       accumulatedTargetRate: percentageValue(row[10] ?? ""),
       accumulatedGrowthRate: percentageValue(row[11] ?? ""),
+      // Kolom tahunan juga bersifat snapshot: ambil nilai pada bulan akhir terpilih.
+      yearlyTargetRate: percentageValue(row[13] ?? ""),
+      yearlyGrowthRate: percentageValue(row[14] ?? ""),
     };
     grouped.set(key, [...(grouped.get(key) ?? []), point]);
   });
