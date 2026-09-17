@@ -49,7 +49,7 @@ function MapFilterSelect({ label, value, options, allLabel, onChange }: { label:
 }
 
 export default function PetaSebaranPage() {
-  const cachedDistribution = getCachedJsonSnapshot<DistributionResponse>("distribution-sheet-production-v2");
+  const cachedDistribution = getCachedJsonSnapshot<DistributionResponse>("distribution-sheet-production-v3");
   const [distribution, setDistribution] = useState<DistributionResponse | null>(cachedDistribution);
   const [isLoading, setIsLoading] = useState(!cachedDistribution);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -72,7 +72,7 @@ export default function PetaSebaranPage() {
     setLoadError(null);
 
     try {
-      const payload = await fetchCachedJson<DistributionResponse>("distribution-sheet-production-v2", "/api/distribution", forceRefresh);
+      const payload = await fetchCachedJson<DistributionResponse>("distribution-sheet-production-v3", "/api/distribution", forceRefresh);
       setDistribution(payload);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Data tidak dapat dimuat.");
@@ -84,7 +84,7 @@ export default function PetaSebaranPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetchCachedJson<DistributionResponse>("distribution-sheet-production-v2", "/api/distribution")
+    fetchCachedJson<DistributionResponse>("distribution-sheet-production-v3", "/api/distribution")
       .then((payload) => {
         if (!cancelled) setDistribution(payload);
       })

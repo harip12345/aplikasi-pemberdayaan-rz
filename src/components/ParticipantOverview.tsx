@@ -13,7 +13,7 @@ import { useReportingPeriod } from "@/components/ReportingPeriodContext";
 const ALL = "Semua";
 const ParticipantCharts = dynamic(() => import("@/components/ParticipantCharts").then((module) => module.ParticipantCharts), { loading: () => <div className="h-[330px] animate-pulse rounded-[26px] bg-slate-100 xl:col-span-2" /> });
 const DEFAULT_MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli"];
-const ANALYSIS_CACHE_KEY = "participant-analysis-v4";
+const ANALYSIS_CACHE_KEY = "participant-analysis-v6";
 type Filters = { startMonthIndex: number; endMonthIndex: number; province: string; city: string; branch: string; program: string; subProgram: string; query: string };
 type ReportRow = Record<AsnafField, number> & { program: string; subProgram: string; total: number; kind: "detail" | "subtotal" | "grand" };
 type BranchReportRow = Record<AsnafField, number> & { branch: string; program: string; total: number; kind: "detail" | "subtotal" | "grand" };

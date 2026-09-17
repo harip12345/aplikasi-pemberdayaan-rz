@@ -9,7 +9,7 @@ const routeData = new Map<string, [string, string]>([
   ["/", ["dashboard-sheet-production-v2", "/api/dashboard"]],
   ["/dampak-program", ["dashboard-sheet-production-v2", "/api/dashboard"]],
   ["/ikhtisar-pp-plp", ["participants-sheet-v1", "/api/participants"]],
-  ["/peta-sebaran", ["distribution-sheet-production-v2", "/api/distribution"]],
+  ["/peta-sebaran", ["distribution-sheet-production-v3", "/api/distribution"]],
   ["/bummas", ["metric-detail-bummas-production-v3", "/api/metric-details/bummas"]],
   ["/garis-kemiskinan", ["metric-detail-garis-kemiskinan-production-v3", "/api/metric-details/garis-kemiskinan"]],
   ["/mualaf", ["metric-detail-mualaf-production-v3", "/api/metric-details/mualaf"]],

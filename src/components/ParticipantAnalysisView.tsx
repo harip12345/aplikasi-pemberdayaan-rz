@@ -10,7 +10,7 @@ import {
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import type { AchievementAnalysis, ParticipantAnalysisData, ParticipantMonthlyGroup } from "@/lib/participant-analysis";
 
-const CACHE_KEY = "participant-analysis-v4";
+const CACHE_KEY = "participant-analysis-v6";
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const ORANGE = "#F2662F";
 const NAVY = "#172436";
@@ -47,6 +47,31 @@ function PortfolioSection({ kind, rows, total, year }: { kind: "PP" | "PLP"; row
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={`rounded-xl px-3 py-2 text-sm font-extrabold text-white ${isPp ? "bg-amber-500" : "bg-pink-600"}`}>{kind}</span><div><h2 className="text-lg font-extrabold text-[#172436]">{isPp ? "Kinerja Peserta Program" : "Kinerja Peserta Layanan Program"}</h2><p className="text-xs text-slate-500">Target, capaian, history, dan growth {year}</p></div></div><div className="rounded-xl border border-white bg-white/80 px-4 py-2 text-right"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total capaian</p><p className={`text-xl font-extrabold ${isPp ? "text-amber-700" : "text-pink-700"}`}>{formatNumber(total.achievement)}</p></div></div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">{rows.map((row) => <SummaryMetricCard key={`${kind}-${row.key}`} label={row.label} metric={isPp ? row.pp : row.plp} kind={kind} />)}</div>
   </section>;
+}
+
+function OverallPerformanceSummary({ kind, metric, year, rateReference }: { kind: "PP" | "PLP"; metric: AchievementAnalysis; year: number; rateReference?: Pick<AchievementAnalysis, "achievementRate" | "growthRate"> }) {
+  const isPp = kind === "PP";
+  const periodAchievementRate = rateReference?.achievementRate ?? metric.achievementRate;
+  const periodGrowthRate = rateReference?.growthRate ?? metric.growthRate;
+  const periodGrowthPositive = periodGrowthRate >= 0;
+  const overallGrowthPositive = metric.growthRate >= 0;
+  const rateTone = periodAchievementRate >= 100 ? "text-emerald-700" : periodAchievementRate >= 70 ? "text-amber-700" : "text-red-600";
+  const accent = isPp ? "text-amber-700" : "text-pink-700";
+  const label = isPp ? "Peserta Program" : "Peserta Layanan Program";
+  return <section>
+    <div className="mb-3"><p className={`text-xs font-bold uppercase tracking-[0.16em] ${isPp ? "text-amber-600" : "text-pink-600"}`}>Ringkasan keseluruhan {kind}</p><h2 className="mt-1 text-2xl font-extrabold text-[#172436]">Kinerja keseluruhan {label} {year}</h2></div>
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_1.45fr]">
+      <OverallMetricCard label="Capaian keseluruhan" value={formatNumber(metric.achievement)} note={`Total capaian seluruh program ${year}`} valueClass={accent} />
+      <OverallMetricCard label="Target keseluruhan" value={formatNumber(metric.target)} note={`Total target seluruh program ${year}`} />
+      <OverallMetricCard label={rateReference ? "% capaian per bulan" : "% capaian target"} value={formatPercent(periodAchievementRate)} note={rateReference ? "Grand Total kolom % Cap Per Bulan" : "Capaian keseluruhan dibanding target"} valueClass={rateTone} />
+      <OverallMetricCard label={rateReference ? "% growth per bulan" : "Growth keseluruhan"} value={`${periodGrowthPositive ? "+" : ""}${formatPercent(periodGrowthRate)}`} note={rateReference ? "Grand Total kolom % Growth Bulan" : `Dibanding history ${formatNumber(metric.history)}`} valueClass={periodGrowthPositive ? "text-emerald-700" : "text-red-600"} />
+      <div className="rounded-2xl bg-[#172436] p-4 text-white shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wider text-white/55">Akumulasi keseluruhan {year}</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white/10 p-3"><p className="text-[9px] text-white/55">% Target</p><p className="mt-1 text-xl font-extrabold">{formatPercent(metric.achievementRate)}</p></div><div className="rounded-xl bg-white/10 p-3"><p className="text-[9px] text-white/55">% Growth</p><p className={`mt-1 text-xl font-extrabold ${overallGrowthPositive ? "text-emerald-300" : "text-red-300"}`}>{overallGrowthPositive ? "+" : ""}{formatPercent(metric.growthRate)}</p></div></div></div>
+    </div>
+  </section>;
+}
+
+function OverallMetricCard({ label, value, note, valueClass = "text-[#172436]" }: { label: string; value: string; note: string; valueClass?: string }) {
+  return <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-3 text-2xl font-extrabold ${valueClass}`}>{value}</p><p className="mt-2 text-[10px] leading-4 text-slate-500">{note}</p></article>;
 }
 
 function MetricCard({ label, value, note, tone = "navy" }: { label: string; value: string; note: string; tone?: "navy" | "green" | "red" | "orange" }) {
@@ -113,7 +138,7 @@ export function ParticipantAnalysisView() {
     <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 md:grid-cols-[220px_1fr] md:items-end"><div><p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">Tampilan data</p><div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1"><button onClick={() => setScope("program")} className={`rounded-lg px-3 py-2 text-xs font-bold ${scope === "program" ? "bg-[#172436] text-white shadow" : "text-slate-500"}`}>Per Program</button><button onClick={() => setScope("division")} className={`rounded-lg px-3 py-2 text-xs font-bold ${scope === "division" ? "bg-[#172436] text-white shadow" : "text-slate-500"}`}>Per Divisi</button></div></div>{view !== "summary" && <div className="grid gap-3 sm:grid-cols-3"><SelectField label="Bulan awal" value={startMonthIndex} onChange={(value) => { const next = Number(value); setStartMonthIndex(next); setEndMonthIndex((current) => Math.max(current, next)); }}>{MONTHS.slice(0, (data?.monthly?.latestMonthIndex ?? 7) + 1).map((month, index) => <option value={index} key={month}>{month}</option>)}</SelectField><SelectField label="Bulan akhir" value={endMonthIndex} onChange={(value) => setEndMonthIndex(Number(value))}>{MONTHS.slice(0, (data?.monthly?.latestMonthIndex ?? 7) + 1).map((month, index) => <option value={index} key={month} disabled={index < startMonthIndex}>{month}</option>)}</SelectField>{view === "monthly" && <SelectField label={scope === "program" ? "Program" : "Divisi"} value={selectedGroup?.key ?? ""} onChange={setSelectedKey}>{monthlyGroups.map((group) => <option value={group.key} key={group.key}>{group.label}</option>)}</SelectField>}</div>}</div>{view !== "summary" && <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[10px] text-slate-500">Angka periode dihitung dari data bulanan. Persentase akumulasi mengambil snapshot {MONTHS[endMonthIndex]}.</p>}</div>
 
     {!data && <div className="h-96 animate-pulse rounded-[24px] bg-slate-100" />}
-    {data && view === "summary" && <div className="space-y-4"><PortfolioSection kind="PP" rows={summaryRows} total={data.totals.pp} year={data.year} /><PortfolioSection kind="PLP" rows={summaryRows} total={data.totals.plp} year={data.year} /></div>}
+    {data && view === "summary" && <div className="space-y-5"><OverallPerformanceSummary kind="PP" metric={data.totals.pp} year={data.year} rateReference={data.monthlyReference.pp} /><PortfolioSection kind="PP" rows={summaryRows} total={data.totals.pp} year={data.year} /><OverallPerformanceSummary kind="PLP" metric={data.totals.plp} year={data.year} /><PortfolioSection kind="PLP" rows={summaryRows} total={data.totals.plp} year={data.year} /></div>}
     {data && view === "monthly" && selectedGroup && <MonthlyView group={selectedGroup} points={selectedPoints} metric={periodMetric} snapshot={snapshot} periodLabel={periodLabel} endMonth={MONTHS[endMonthIndex]} />}
     {data && view === "comparison" && <ComparisonView rows={comparisonRows} endMonthIndex={endMonthIndex} scope={scope} />}
   </section>;

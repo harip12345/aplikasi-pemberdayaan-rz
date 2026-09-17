@@ -21,6 +21,7 @@ export type ParticipantAnalysisData = {
   rows: ParticipantAnalysisRow[];
   divisions: ParticipantDivisionAnalysisRow[];
   totals: { pp: AchievementAnalysis; plp: AchievementAnalysis };
+  monthlyReference: { pp: Pick<AchievementAnalysis, "achievementRate" | "growthRate"> };
   monthly: {
     programs: ParticipantMonthlyGroup[];
     divisions: ParticipantMonthlyGroup[];
@@ -158,11 +159,16 @@ export async function getParticipantAnalysisData(): Promise<ParticipantAnalysisD
   const [header = [], ...rawRows] = parseCsv(csv.replace(/^\uFEFF/, ""));
 
   // Kolom biru muda (6-10 dan 23-27) sengaja tidak dibaca.
+  const grandTotalRow = rawRows.find((row) => /^grand\s*total$/i.test((row[0] ?? "").trim()));
   const rows = rawRows.flatMap((row): ParticipantAnalysisRow[] => {
     const program = (row[0] ?? "").trim();
-    if (!program || !row.slice(1, 6).some(Boolean)) return [];
+    if (!program || /^grand\s*total$/i.test(program) || !row.slice(1, 6).some(Boolean)) return [];
     return [{ program, pp: metric(row[1] ?? "", row[2] ?? "", row[4] ?? ""), plp: metric(row[11] ?? "", row[12] ?? "", row[14] ?? "") }];
   });
+  const ppMonthlyReference = {
+    achievementRate: percentageValue(grandTotalRow?.[8] ?? ""),
+    growthRate: percentageValue(grandTotalRow?.[10] ?? ""),
+  };
   const divisions = rawRows.flatMap((row): ParticipantDivisionAnalysisRow[] => {
     const division = (row[17] ?? "").trim();
     if (!division || !row.slice(18, 23).some(Boolean)) return [];
@@ -181,6 +187,7 @@ export async function getParticipantAnalysisData(): Promise<ParticipantAnalysisD
     rows,
     divisions,
     totals: { pp: totalMetric(rows.map((row) => row.pp)), plp: totalMetric(rows.map((row) => row.plp)) },
+    monthlyReference: { pp: ppMonthlyReference },
     monthly: {
       programs: monthlyPrograms,
       divisions: monthlyDivisions,
