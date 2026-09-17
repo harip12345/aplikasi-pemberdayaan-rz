@@ -2,61 +2,80 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, ExternalLink, RefreshCw, Target, TrendingDown, TrendingUp, Users } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, LabelList, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ArrowLeft, BarChart3, ExternalLink, Grid3X3, RefreshCw, TrendingUp } from "lucide-react";
+import {
+  Bar, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart, ReferenceArea,
+  ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis,
+} from "recharts";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
-import type { AchievementAnalysis, ParticipantAnalysisData } from "@/lib/participant-analysis";
+import type { AchievementAnalysis, ParticipantAnalysisData, ParticipantMonthlyGroup } from "@/lib/participant-analysis";
 
-const CACHE_KEY = "participant-analysis-v3";
-const PP_COLOR = "#E9A400";
-const PLP_COLOR = "#D94A83";
-const formatNumber = (value: number) => new Intl.NumberFormat("id-ID").format(Math.round(value));
-const formatPercent = (value: number) => `${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
+const CACHE_KEY = "participant-analysis-v4";
+const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const ORANGE = "#F2662F";
+const NAVY = "#172436";
 
 type Scope = "program" | "division";
-type CardRow = { key: string; title: string; shortTitle: string; abbreviation?: string; pp: AchievementAnalysis; plp: AchievementAnalysis };
+type ViewMode = "summary" | "monthly" | "comparison";
+type SummaryRow = { key: string; label: string; pp: AchievementAnalysis; plp: AchievementAnalysis };
 
-function MiniMetric({ label, value, tone }: { label: string; value: string; tone?: "positive" | "negative" }) {
-  return <div className="rounded-xl border border-white/80 bg-white/75 px-3 py-2"><p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className={`mt-1 text-sm font-extrabold ${tone === "positive" ? "text-emerald-700" : tone === "negative" ? "text-red-600" : "text-slate-700"}`}>{value}</p></div>;
+const formatNumber = (value: number) => new Intl.NumberFormat("id-ID").format(Math.round(value));
+const formatPercent = (value: number) => `${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
+const metricTone = (value: number) => value >= 100 ? "text-emerald-700" : value >= 70 ? "text-amber-700" : "text-red-600";
+
+function sumMetric(group: ParticipantMonthlyGroup | undefined, start: number, end: number): AchievementAnalysis {
+  const points = group?.points.filter((point) => point.monthIndex >= start && point.monthIndex <= end) ?? [];
+  const target = points.reduce((sum, point) => sum + point.target, 0);
+  const achievement = points.reduce((sum, point) => sum + point.achievement, 0);
+  const history = points.reduce((sum, point) => sum + point.history, 0);
+  return { target, achievement, history, achievementRate: target > 0 ? achievement / target * 100 : 0, growthRate: history > 0 ? (achievement - history) / history * 100 : 0 };
 }
 
-function SummaryCard({ kind, metric, year }: { kind: "PP" | "PLP"; metric: AchievementAnalysis; year: number }) {
+function SummaryMetricCard({ label, metric, kind }: { label: string; metric: AchievementAnalysis; kind: "PP" | "PLP" }) {
   const isPp = kind === "PP";
-  return <article className={`relative overflow-hidden rounded-[26px] border p-5 shadow-soft ${isPp ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white" : "border-pink-200 bg-gradient-to-br from-pink-50 to-white"}`}>
-    <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${isPp ? "bg-amber-300/20" : "bg-pink-300/20"}`} />
-    <div className="relative flex items-start justify-between gap-4"><div><p className={`text-[11px] font-extrabold uppercase tracking-[0.16em] ${isPp ? "text-amber-700" : "text-pink-700"}`}>{isPp ? "Peserta Program (PP)" : "Peserta Layanan Program (PLP)"}</p><p className="mt-2 text-3xl font-extrabold tracking-tight text-[#172436]">{formatNumber(metric.achievement)}</p><p className="mt-1 text-xs text-slate-500">Capaian {year}</p></div><span className={`grid h-11 w-11 place-items-center rounded-2xl ${isPp ? "bg-amber-100 text-amber-700" : "bg-pink-100 text-pink-700"}`}>{isPp ? <Users size={21} /> : <Target size={21} />}</span></div>
-    <div className="relative mt-5 grid grid-cols-3 gap-2"><MiniMetric label="Target" value={formatNumber(metric.target)} /><MiniMetric label="History" value={formatNumber(metric.history)} /><MiniMetric label="Growth" value={`${metric.growthRate >= 0 ? "+" : ""}${formatPercent(metric.growthRate)}`} tone={metric.growthRate >= 0 ? "positive" : "negative"} /></div>
-    <div className="relative mt-4"><div className="flex items-end justify-between"><span className="text-[11px] font-semibold text-slate-500">Realisasi target</span><strong className={metric.achievementRate >= 100 ? "text-emerald-700" : metric.achievementRate >= 70 ? "text-amber-700" : "text-red-600"}>{formatPercent(metric.achievementRate)}</strong></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${metric.achievementRate >= 100 ? "bg-emerald-500" : metric.achievementRate >= 70 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${Math.min(metric.achievementRate, 100)}%` }} /></div></div>
+  return <article className={`rounded-2xl border bg-white p-3.5 shadow-sm ${isPp ? "border-amber-200" : "border-pink-200"}`}>
+    <p className="min-h-8 text-xs font-extrabold leading-4 text-[#172436]">{label}</p>
+    <p className="mt-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">Capaian</p>
+    <p className={`mt-0.5 text-xl font-extrabold ${isPp ? "text-amber-700" : "text-pink-700"}`}>{formatNumber(metric.achievement)}</p>
+    <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-slate-100 pt-2 text-[10px]"><span className="text-slate-400">Target</span><strong className="text-right text-slate-700">{formatNumber(metric.target)}</strong><span className="text-slate-400">History</span><strong className="text-right text-slate-700">{formatNumber(metric.history)}</strong><span className="text-slate-400">% Target</span><strong className={`text-right ${metricTone(metric.achievementRate)}`}>{formatPercent(metric.achievementRate)}</strong><span className="text-slate-400">Growth</span><strong className={`text-right ${metric.growthRate >= 0 ? "text-emerald-700" : "text-red-600"}`}>{metric.growthRate >= 0 ? "+" : ""}{formatPercent(metric.growthRate)}</strong></div>
   </article>;
 }
 
-function MetricPanel({ kind, metric }: { kind: "PP" | "PLP"; metric: AchievementAnalysis }) {
+function PortfolioSection({ kind, rows, total, year }: { kind: "PP" | "PLP"; rows: SummaryRow[]; total: AchievementAnalysis; year: number }) {
   const isPp = kind === "PP";
-  return <div className={`p-5 ${isPp ? "bg-amber-50/65" : "border-t border-pink-100 bg-pink-50/60 md:border-l md:border-t-0"}`}>
-    <div className="flex items-center justify-between"><span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${isPp ? "bg-amber-200/70 text-amber-800" : "bg-pink-200/70 text-pink-800"}`}>{kind}</span><span className={`inline-flex items-center gap-1 text-xs font-extrabold ${metric.growthRate >= 0 ? "text-emerald-700" : "text-red-600"}`}>{metric.growthRate >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{metric.growthRate >= 0 ? "+" : ""}{formatPercent(metric.growthRate)}</span></div>
-    <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Capaian</p><p className="mt-1 text-2xl font-extrabold tracking-tight text-[#172436]">{formatNumber(metric.achievement)}</p>
-    <div className="mt-4 grid grid-cols-2 gap-2"><MiniMetric label="Target" value={formatNumber(metric.target)} /><MiniMetric label="History" value={formatNumber(metric.history)} /></div>
-    <div className="mt-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-white"><div className={`h-full rounded-full ${isPp ? "bg-amber-500" : "bg-pink-500"}`} style={{ width: `${Math.min(metric.achievementRate, 100)}%` }} /></div><strong className="min-w-[52px] text-right text-xs text-slate-700">{formatPercent(metric.achievementRate)}</strong></div>
-  </div>;
+  return <section className={`rounded-[24px] border p-4 ${isPp ? "border-amber-200 bg-amber-50/70" : "border-pink-200 bg-pink-50/65"}`}>
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={`rounded-xl px-3 py-2 text-sm font-extrabold text-white ${isPp ? "bg-amber-500" : "bg-pink-600"}`}>{kind}</span><div><h2 className="text-lg font-extrabold text-[#172436]">{isPp ? "Kinerja Peserta Program" : "Kinerja Peserta Layanan Program"}</h2><p className="text-xs text-slate-500">Target, capaian, history, dan growth {year}</p></div></div><div className="rounded-xl border border-white bg-white/80 px-4 py-2 text-right"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total capaian</p><p className={`text-xl font-extrabold ${isPp ? "text-amber-700" : "text-pink-700"}`}>{formatNumber(total.achievement)}</p></div></div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">{rows.map((row) => <SummaryMetricCard key={`${kind}-${row.key}`} label={row.label} metric={isPp ? row.pp : row.plp} kind={kind} />)}</div>
+  </section>;
 }
 
-function PerformanceCard({ row }: { row: CardRow }) {
-  return <article className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-    <header className="flex min-h-[74px] items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h3 className="text-base font-extrabold leading-5 text-[#172436]">{row.title}</h3>{row.abbreviation && <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{row.abbreviation}</p>}</div><ArrowUpRight size={17} className="shrink-0 text-slate-300" /></header>
-    <div className="grid md:grid-cols-2"><MetricPanel kind="PP" metric={row.pp} /><MetricPanel kind="PLP" metric={row.plp} /></div>
-  </article>;
+function MetricCard({ label, value, note, tone = "navy" }: { label: string; value: string; note: string; tone?: "navy" | "green" | "red" | "orange" }) {
+  const color = tone === "green" ? "text-emerald-700" : tone === "red" ? "text-red-600" : tone === "orange" ? "text-[#E64A19]" : "text-[#172436]";
+  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p><p className={`mt-2 text-2xl font-extrabold ${color}`}>{value}</p><p className="mt-1 text-[10px] leading-4 text-slate-500">{note}</p></div>;
+}
+
+function SelectField({ label, value, onChange, children }: { label: string; value: string | number; onChange: (value: string) => void; children: ReactNode }) {
+  return <label className="block"><span className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus:border-orange-400">{children}</select></label>;
 }
 
 export function ParticipantAnalysisView() {
   const cached = getCachedJsonSnapshot<ParticipantAnalysisData>(CACHE_KEY);
   const [data, setData] = useState<ParticipantAnalysisData | null>(cached);
+  const [view, setView] = useState<ViewMode>("summary");
   const [scope, setScope] = useState<Scope>("program");
+  const [startMonthIndex, setStartMonthIndex] = useState(0);
+  const [endMonthIndex, setEndMonthIndex] = useState(cached?.monthly?.latestMonthIndex ?? 7);
+  const [selectedKey, setSelectedKey] = useState("");
   const [isLoading, setIsLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   const load = async (forceRefresh = false) => {
     setIsLoading(true); setError(null);
-    try { setData(await fetchCachedJson<ParticipantAnalysisData>(CACHE_KEY, "/api/participant-analysis", forceRefresh)); }
+    try {
+      const nextData = await fetchCachedJson<ParticipantAnalysisData>(CACHE_KEY, "/api/participant-analysis", forceRefresh);
+      setData(nextData);
+      setEndMonthIndex(nextData.monthly.latestMonthIndex);
+    }
     catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Data analisa tidak dapat dimuat."); }
     finally { setIsLoading(false); }
   };
@@ -64,48 +83,131 @@ export function ParticipantAnalysisView() {
   useEffect(() => {
     let cancelled = false;
     fetchCachedJson<ParticipantAnalysisData>(CACHE_KEY, "/api/participant-analysis")
-      .then((nextData) => { if (!cancelled) setData(nextData); })
+      .then((nextData) => { if (!cancelled) { setData(nextData); setEndMonthIndex(nextData.monthly.latestMonthIndex); } })
       .catch((loadError: unknown) => { if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Data analisa tidak dapat dimuat."); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  const rows = useMemo<CardRow[]>(() => scope === "program"
-    ? data?.rows.map((row) => ({ key: row.program, title: row.program, shortTitle: row.program.replace("Lingkungan dan sosial", "Lingkungan & sosial").replace("Siaga Bencana & Kemanusiaan", "Siaga Bencana"), pp: row.pp, plp: row.plp })) ?? []
-    : data?.divisions.map((row) => ({ key: row.division, title: row.divisionLabel, shortTitle: row.division.replace("Project Div", "Project").replace("Dakwah Div", "Dakwah"), abbreviation: row.divisionLabel !== row.division ? row.division : undefined, pp: row.pp, plp: row.plp })) ?? [], [data, scope]);
-  const chartRows = useMemo(() => rows.map((row) => ({ name: row.shortTitle, ppRate: row.pp.achievementRate, plpRate: row.plp.achievementRate, ppGrowth: row.pp.growthRate, plpGrowth: row.plp.growthRate })), [rows]);
-  const reachedPp = rows.filter((row) => row.pp.achievementRate >= 100).length;
-  const reachedPlp = rows.filter((row) => row.plp.achievementRate >= 100).length;
-  const bestPp = rows.reduce<CardRow | null>((best, row) => !best || row.pp.achievementRate > best.pp.achievementRate ? row : best, null);
-  const bestPlp = rows.reduce<CardRow | null>((best, row) => !best || row.plp.achievementRate > best.plp.achievementRate ? row : best, null);
+  const summaryRows = useMemo<SummaryRow[]>(() => scope === "program"
+    ? data?.rows.map((row) => ({ key: row.program, label: row.program, pp: row.pp, plp: row.plp })) ?? []
+    : data?.divisions.map((row) => ({ key: row.division, label: row.divisionLabel, pp: row.pp, plp: row.plp })) ?? [], [data, scope]);
+  const monthlyGroups = useMemo(() => scope === "program" ? data?.monthly?.programs ?? [] : data?.monthly?.divisions ?? [], [data, scope]);
+  const selectedGroup = monthlyGroups.find((group) => group.key === selectedKey) ?? monthlyGroups[0];
+  const periodMetric = useMemo(() => sumMetric(selectedGroup, startMonthIndex, endMonthIndex), [selectedGroup, startMonthIndex, endMonthIndex]);
+  const selectedPoints = selectedGroup?.points.filter((point) => point.monthIndex >= startMonthIndex && point.monthIndex <= endMonthIndex) ?? [];
+  const snapshot = selectedGroup?.points.find((point) => point.monthIndex === endMonthIndex) ?? selectedGroup?.points.filter((point) => point.monthIndex <= endMonthIndex).at(-1);
+  const comparisonRows = useMemo(() => monthlyGroups.map((group) => {
+    const point = group.points.find((item) => item.monthIndex === endMonthIndex) ?? group.points.filter((item) => item.monthIndex <= endMonthIndex).at(-1);
+    return { key: group.key, label: group.label, targetRate: point?.accumulatedTargetRate ?? 0, growthRate: point?.accumulatedGrowthRate ?? 0, points: group.points };
+  }).sort((a, b) => b.targetRate - a.targetRate), [monthlyGroups, endMonthIndex]);
+  const periodLabel = `${MONTHS[startMonthIndex]}–${MONTHS[endMonthIndex]} ${data?.year ?? ""}`;
 
-  return <section className="space-y-6">
-    <div className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-[#0D1B2A] via-[#1B263B] to-[#32415B] p-6 text-white shadow-xl shadow-black/15 lg:p-8">
-      <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-orange-500/10 blur-3xl" />
-      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div><Link href="/ikhtisar-pp-plp" className="inline-flex items-center gap-2 text-xs font-semibold text-white/65 transition hover:text-white"><ArrowLeft size={14} /> Kembali ke Peserta Program</Link><p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">Analisa Capaian {data?.year ?? ""}</p><h1 className="mt-2 max-w-3xl text-3xl font-extrabold tracking-tight lg:text-4xl">Kinerja Peserta Program dan Peserta Layanan Program</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">Capaian, target, history, realisasi target, dan growth disajikan per program serta per divisi. Kolom periode berwarna biru pada sumber tidak digunakan.</p></div><div className="flex flex-wrap gap-2"><a href={data?.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold text-white/80 hover:bg-white/10"><ExternalLink size={14} /> Buka sumber</a><button type="button" onClick={() => void load(true)} disabled={isLoading} className="inline-flex items-center gap-2 rounded-xl bg-[#F2662F] px-4 py-3 text-xs font-bold text-white disabled:opacity-50"><RefreshCw size={14} className={isLoading ? "animate-spin" : ""} /> Muat ulang</button></div></div>
-    </div>
+  return <section className="space-y-5">
+    <header className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#0D1B2A] via-[#172436] to-[#30405A] p-6 text-white shadow-xl shadow-black/10 lg:p-8"><div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" /><div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><Link href="/ikhtisar-pp-plp" className="inline-flex items-center gap-2 text-xs font-semibold text-white/65 hover:text-white"><ArrowLeft size={14} /> Kembali ke Peserta Program</Link><p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">Analisa Capaian {data?.year ?? ""}</p><h1 className="mt-2 max-w-4xl text-3xl font-extrabold tracking-tight lg:text-4xl">Kinerja Peserta Program dan Peserta Layanan Program</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">Ringkasan kinerja, perkembangan bulanan, dan posisi capaian program serta divisi.</p></div><div className="flex flex-wrap gap-2"><a href={view === "monthly" || view === "comparison" ? (scope === "program" ? data?.monthly?.programSourceUrl : data?.monthly?.divisionSourceUrl) : data?.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold text-white/80 hover:bg-white/10"><ExternalLink size={14} /> Buka sumber</a><button type="button" onClick={() => void load(true)} disabled={isLoading} className="inline-flex items-center gap-2 rounded-xl bg-[#F2662F] px-4 py-3 text-xs font-bold text-white disabled:opacity-50"><RefreshCw size={14} className={isLoading ? "animate-spin" : ""} /> Muat ulang</button></div></div></header>
 
     {error && <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-    <div className="grid gap-4 lg:grid-cols-2">{data ? <><SummaryCard kind="PP" metric={data.totals.pp} year={data.year} /><SummaryCard kind="PLP" metric={data.totals.plp} year={data.year} /></> : <><div className="h-64 animate-pulse rounded-[26px] bg-slate-100" /><div className="h-64 animate-pulse rounded-[26px] bg-slate-100" /></>}</div>
 
-    <div className="rounded-[26px] border border-slate-200 bg-white p-3 shadow-soft"><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setScope("program")} className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${scope === "program" ? "bg-[#172436] text-white shadow-md" : "text-slate-500 hover:bg-slate-50"}`}>Analisa per Program</button><button type="button" onClick={() => setScope("division")} className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${scope === "division" ? "bg-[#172436] text-white shadow-md" : "text-slate-500 hover:bg-slate-50"}`}>Analisa per Divisi</button></div></div>
+    <nav className="grid gap-2 rounded-[20px] border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-3"><ViewButton active={view === "summary"} onClick={() => setView("summary")} icon={<Grid3X3 size={15} />} label="Ringkasan PP & PLP" /><ViewButton active={view === "monthly"} onClick={() => setView("monthly")} icon={<BarChart3 size={15} />} label="Analisa Bulanan" /><ViewButton active={view === "comparison"} onClick={() => setView("comparison")} icon={<TrendingUp size={15} />} label="Perbandingan Kinerja" /></nav>
 
-    <div><div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#F2662F]">Portofolio {scope === "program" ? "program" : "divisi"}</p><h2 className="mt-1 text-xl font-extrabold text-[#172436]">Kartu kinerja PP dan PLP</h2></div><p className="text-xs text-slate-500">Kuning: PP · Pink: PLP</p></div><div className="grid gap-4 xl:grid-cols-2">{rows.map((row) => <PerformanceCard key={row.key} row={row} />)}</div></div>
+    <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 md:grid-cols-[220px_1fr] md:items-end"><div><p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">Tampilan data</p><div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1"><button onClick={() => setScope("program")} className={`rounded-lg px-3 py-2 text-xs font-bold ${scope === "program" ? "bg-[#172436] text-white shadow" : "text-slate-500"}`}>Per Program</button><button onClick={() => setScope("division")} className={`rounded-lg px-3 py-2 text-xs font-bold ${scope === "division" ? "bg-[#172436] text-white shadow" : "text-slate-500"}`}>Per Divisi</button></div></div>{view !== "summary" && <div className="grid gap-3 sm:grid-cols-3"><SelectField label="Bulan awal" value={startMonthIndex} onChange={(value) => { const next = Number(value); setStartMonthIndex(next); setEndMonthIndex((current) => Math.max(current, next)); }}>{MONTHS.slice(0, (data?.monthly?.latestMonthIndex ?? 7) + 1).map((month, index) => <option value={index} key={month}>{month}</option>)}</SelectField><SelectField label="Bulan akhir" value={endMonthIndex} onChange={(value) => setEndMonthIndex(Number(value))}>{MONTHS.slice(0, (data?.monthly?.latestMonthIndex ?? 7) + 1).map((month, index) => <option value={index} key={month} disabled={index < startMonthIndex}>{month}</option>)}</SelectField>{view === "monthly" && <SelectField label={scope === "program" ? "Program" : "Divisi"} value={selectedGroup?.key ?? ""} onChange={setSelectedKey}>{monthlyGroups.map((group) => <option value={group.key} key={group.key}>{group.label}</option>)}</SelectField>}</div>}</div>{view !== "summary" && <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[10px] text-slate-500">Angka periode dihitung dari data bulanan. Persentase akumulasi mengambil snapshot {MONTHS[endMonthIndex]}.</p>}</div>
 
-    <div className="grid gap-5 xl:grid-cols-2">
-      <ChartCard eyebrow="Realisasi target" title={`Persentase capaian per ${scope === "program" ? "program" : "divisi"}`}><ResponsiveContainer><BarChart data={chartRows} layout="vertical" margin={{ left: 22, right: 46 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" /><XAxis type="number" tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10 }} /><YAxis dataKey="name" type="category" width={128} tick={{ fontSize: 10 }} /><Tooltip formatter={(value) => formatPercent(Number(value))} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine x={100} stroke="#16A34A" strokeDasharray="4 4" /><Bar dataKey="ppRate" name="PP" fill={PP_COLOR} radius={[0, 5, 5, 0]}><LabelList dataKey="ppRate" position="right" formatter={(value: unknown) => formatPercent(Number(value))} fill="#475569" fontSize={9} fontWeight={700} /></Bar><Bar dataKey="plpRate" name="PLP" fill={PLP_COLOR} radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></ChartCard>
-      <ChartCard eyebrow="Perubahan terhadap history" title={`Growth per ${scope === "program" ? "program" : "divisi"}`}><ResponsiveContainer><BarChart data={chartRows} layout="vertical" margin={{ left: 22, right: 46 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" /><XAxis type="number" tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10 }} /><YAxis dataKey="name" type="category" width={128} tick={{ fontSize: 10 }} /><Tooltip formatter={(value) => formatPercent(Number(value))} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine x={0} stroke="#64748B" /><Bar dataKey="ppGrowth" name="PP" fill={PP_COLOR} radius={[0, 5, 5, 0]}><LabelList dataKey="ppGrowth" position="right" formatter={(value: unknown) => formatPercent(Number(value))} fill="#475569" fontSize={9} fontWeight={700} /></Bar><Bar dataKey="plpGrowth" name="PLP" fill={PLP_COLOR} radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></ChartCard>
-    </div>
-
-    {rows.length > 0 && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Insight label="PP mencapai target" value={`${reachedPp} dari ${rows.length}`} note={bestPp ? `Tertinggi: ${bestPp.title} (${formatPercent(bestPp.pp.achievementRate)})` : ""} tone="amber" /><Insight label="PLP mencapai target" value={`${reachedPlp} dari ${rows.length}`} note={bestPlp ? `Tertinggi: ${bestPlp.title} (${formatPercent(bestPlp.plp.achievementRate)})` : ""} tone="pink" /><Insight label="Basis perbandingan" value="History sumber" note="Growth dihitung dari capaian terhadap history masing-masing kelompok." tone="slate" /><Insight label="Cakupan analisa" value={`${rows.length} ${scope === "program" ? "program" : "divisi"}`} note="Data periode biru dikecualikan sesuai struktur sumber." tone="slate" /></div>}
+    {!data && <div className="h-96 animate-pulse rounded-[24px] bg-slate-100" />}
+    {data && view === "summary" && <div className="space-y-4"><PortfolioSection kind="PP" rows={summaryRows} total={data.totals.pp} year={data.year} /><PortfolioSection kind="PLP" rows={summaryRows} total={data.totals.plp} year={data.year} /></div>}
+    {data && view === "monthly" && selectedGroup && <MonthlyView group={selectedGroup} points={selectedPoints} metric={periodMetric} snapshot={snapshot} periodLabel={periodLabel} endMonth={MONTHS[endMonthIndex]} />}
+    {data && view === "comparison" && <ComparisonView rows={comparisonRows} endMonthIndex={endMonthIndex} scope={scope} />}
   </section>;
 }
 
-function ChartCard({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
-  return <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-soft"><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#F2662F]">{eyebrow}</p><h2 className="mt-1 text-lg font-bold text-[#172436]">{title}</h2><div className="mt-5 h-[390px]">{children}</div></div>;
+function ViewButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: ReactNode; label: string }) {
+  return <button type="button" onClick={onClick} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold transition ${active ? "bg-[#F2662F] text-white shadow-md shadow-orange-200" : "text-slate-500 hover:bg-slate-50"}`}>{icon}{label}</button>;
 }
 
-function Insight({ label, value, note, tone }: { label: string; value: string; note: string; tone: "amber" | "pink" | "slate" }) {
-  const classes = tone === "amber" ? "border-amber-200 bg-amber-50" : tone === "pink" ? "border-pink-200 bg-pink-50" : "border-slate-200 bg-white";
-  return <div className={`rounded-[20px] border p-4 ${classes}`}><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-xl font-extrabold text-[#172436]">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{note}</p></div>;
+function MonthlyView({ group, points, metric, snapshot, periodLabel, endMonth }: { group: ParticipantMonthlyGroup; points: ParticipantMonthlyGroup["points"]; metric: AchievementAnalysis; snapshot: ParticipantMonthlyGroup["points"][number] | undefined; periodLabel: string; endMonth: string }) {
+  return <div className="space-y-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#F2662F]">Analisa bulanan {group.label}</p><h2 className="mt-1 text-2xl font-extrabold text-[#172436]">Kinerja periode {periodLabel}</h2></div>
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1.45fr]"><MetricCard label="Capaian periode" value={formatNumber(metric.achievement)} note={`Total capaian ${periodLabel}`} tone="orange" /><MetricCard label="Target periode" value={formatNumber(metric.target)} note={`Total target ${periodLabel}`} /><MetricCard label="% capaian periode" value={formatPercent(metric.achievementRate)} note="Dihitung ulang dari total bulanan" tone={metric.achievementRate >= 100 ? "green" : metric.achievementRate >= 70 ? "orange" : "red"} /><MetricCard label="Growth periode" value={`${metric.growthRate >= 0 ? "+" : ""}${formatPercent(metric.growthRate)}`} note={`Dibanding history ${formatNumber(metric.history)}`} tone={metric.growthRate >= 0 ? "green" : "red"} /><div className="rounded-2xl bg-[#172436] p-4 text-white shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wider text-white/55">Akumulasi sampai {endMonth}</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white/10 p-3"><p className="text-[9px] text-white/55">% Target</p><p className="mt-1 text-xl font-extrabold">{formatPercent(snapshot?.accumulatedTargetRate ?? 0)}</p></div><div className="rounded-xl bg-white/10 p-3"><p className="text-[9px] text-white/55">% Growth</p><p className={`mt-1 text-xl font-extrabold ${(snapshot?.accumulatedGrowthRate ?? 0) >= 0 ? "text-emerald-300" : "text-red-300"}`}>{(snapshot?.accumulatedGrowthRate ?? 0) >= 0 ? "+" : ""}{formatPercent(snapshot?.accumulatedGrowthRate ?? 0)}</p></div></div></div></div>
+    <div className="grid gap-5 xl:grid-cols-[1.25fr_1fr]"><ChartPanel title="Target, capaian, dan history per bulan"><ResponsiveContainer><ComposedChart data={points} margin={{ top: 15, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" /><XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(value) => String(value).slice(0, 3)} /><YAxis tick={{ fontSize: 10 }} tickFormatter={(value) => formatNumber(Number(value))} /><Tooltip formatter={(value) => formatNumber(Number(value))} /><Legend wrapperStyle={{ fontSize: 11 }} /><Bar dataKey="target" name="Target" fill="#F59E0B" radius={[5, 5, 0, 0]} /><Bar dataKey="achievement" name="Capaian" fill={NAVY} radius={[5, 5, 0, 0]} /><Line dataKey="history" name="History" stroke="#94A3B8" strokeWidth={2.5} strokeDasharray="5 4" dot={{ r: 3 }} /></ComposedChart></ResponsiveContainer></ChartPanel><ChartPanel title="Persentase kinerja bulanan"><ResponsiveContainer><LineChart data={points} margin={{ top: 15, right: 20, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" /><XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(value) => String(value).slice(0, 3)} /><YAxis tick={{ fontSize: 10 }} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value) => formatPercent(Number(value))} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine y={100} stroke="#16A34A" strokeDasharray="5 4" /><Line dataKey="achievementRate" name="% Target per Bulan" stroke={ORANGE} strokeWidth={2.5} dot={{ r: 4 }} /><Line dataKey="growthRate" name="% Growth per Bulan" stroke={NAVY} strokeWidth={2.5} dot={{ r: 4 }} /></LineChart></ResponsiveContainer></ChartPanel></div>
+    <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 px-5 py-4"><h3 className="font-extrabold text-[#172436]">Rincian bulanan</h3><p className="mt-1 text-[10px] text-slate-500">Persentase periode dihitung dari nilai masing-masing bulan, bukan dari kolom akumulasi.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3 text-left">Bulan</th><th className="px-4 py-3 text-right">Target</th><th className="px-4 py-3 text-right">Capaian</th><th className="px-4 py-3 text-right">History</th><th className="px-4 py-3 text-right">% Target</th><th className="px-4 py-3 text-right">Growth</th></tr></thead><tbody>{points.map((point) => <tr key={point.monthIndex} className="border-t border-slate-100"><td className="px-4 py-3 font-semibold">{point.month}</td><td className="px-4 py-3 text-right">{formatNumber(point.target)}</td><td className="px-4 py-3 text-right font-bold">{formatNumber(point.achievement)}</td><td className="px-4 py-3 text-right">{formatNumber(point.history)}</td><td className={`px-4 py-3 text-right font-bold ${metricTone(point.achievementRate)}`}>{formatPercent(point.achievementRate)}</td><td className={`px-4 py-3 text-right font-bold ${point.growthRate >= 0 ? "text-emerald-700" : "text-red-600"}`}>{point.growthRate >= 0 ? "+" : ""}{formatPercent(point.growthRate)}</td></tr>)}</tbody></table></div></div>
+  </div>;
+}
+
+type ComparisonRow = { key: string; label: string; targetRate: number; growthRate: number; points: ParticipantMonthlyGroup["points"] };
+function comparisonStatus(row: ComparisonRow) {
+  return row.targetRate >= 100 ? row.growthRate >= 0 ? "Kinerja kuat" : "Jaga tren" : row.growthRate >= 0 ? "Bertumbuh" : "Prioritas";
+}
+
+function statusAction(status: string) {
+  if (status === "Kinerja kuat") return "Pertahankan ritme";
+  if (status === "Bertumbuh") return "Percepat capaian target";
+  if (status === "Jaga tren") return "Evaluasi penurunan";
+  return "Fokus pemulihan capaian";
+}
+
+function statusClasses(status: string) {
+  if (status === "Kinerja kuat") return "bg-emerald-100 text-emerald-800";
+  if (status === "Bertumbuh") return "bg-amber-100 text-amber-800";
+  if (status === "Jaga tren") return "bg-blue-100 text-blue-800";
+  return "bg-red-100 text-red-700";
+}
+
+function ComparisonView({ rows, endMonthIndex, scope }: { rows: ComparisonRow[]; endMonthIndex: number; scope: Scope }) {
+  const targetScale = Math.max(120, Math.ceil(Math.max(...rows.map((row) => row.targetRate), 100) * 1.12 / 20) * 20);
+  const growthMin = Math.min(-20, Math.floor((Math.min(...rows.map((row) => row.growthRate), 0) - 5) / 10) * 10);
+  const growthMax = Math.max(20, Math.ceil((Math.max(...rows.map((row) => row.growthRate), 0) + 5) / 10) * 10);
+
+  return <div className="space-y-5">
+    <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#F2662F]">Perbandingan {scope === "program" ? "program" : "divisi"}</p><h2 className="mt-1 text-2xl font-extrabold text-[#172436]">Kinerja sampai {MONTHS[endMonthIndex]} 2026</h2></div>
+
+    <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
+      <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-extrabold text-[#172436]">Kinerja bulanan terhadap target</h3><p className="mt-1 text-[10px] text-slate-500">Merah &lt;70% · Kuning 70–99,9% · Hijau ≥100%</p><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[650px] text-[10px]"><thead><tr><th className="px-2 py-2 text-left text-slate-400">{scope === "program" ? "Program" : "Divisi"}</th>{MONTHS.slice(0, endMonthIndex + 1).map((month) => <th key={month} className="px-2 py-2 text-center text-slate-400">{month.slice(0, 3)}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.key} className="border-t border-slate-100"><td className="max-w-[160px] px-2 py-2 font-bold text-slate-700">{row.label}</td>{MONTHS.slice(0, endMonthIndex + 1).map((_, monthIndex) => { const value = row.points.find((point) => point.monthIndex === monthIndex)?.achievementRate; return <td key={monthIndex} className="p-1"><div className={`rounded-lg px-1.5 py-2 text-center font-extrabold ${value === undefined ? "bg-slate-100 text-slate-400" : value >= 100 ? "bg-emerald-500 text-white" : value >= 70 ? "bg-amber-300 text-amber-950" : "bg-red-500 text-white"}`}>{value === undefined ? "—" : formatPercent(value)}</div></td>; })}</tr>)}</tbody></table></div></div>
+
+      <PerformanceMap rows={rows} targetScale={targetScale} growthMin={growthMin} growthMax={growthMax} endMonth={MONTHS[endMonthIndex]} scope={scope} />
+    </div>
+
+    <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 px-5 py-4"><h3 className="font-extrabold text-[#172436]">Peringkat kinerja sampai {MONTHS[endMonthIndex]}</h3><p className="mt-1 text-[10px] text-slate-500">Urutan berdasarkan persentase target akumulasi. Posisi dan tindak lanjut membaca capaian target bersama arah pertumbuhannya.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3 text-left">#</th><th className="px-4 py-3 text-left">{scope === "program" ? "Program" : "Divisi"}</th><th className="px-4 py-3 text-right">% Target Akumulasi</th><th className="px-4 py-3 text-right">% Growth Akumulasi</th><th className="px-4 py-3 text-left">Posisi</th><th className="px-4 py-3 text-left">Arah tindak lanjut</th></tr></thead><tbody>{rows.map((row, index) => { const status = comparisonStatus(row); return <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-4 py-3 text-slate-400">{index + 1}</td><td className="px-4 py-3 font-bold text-slate-700">{row.label}</td><td className={`px-4 py-3 text-right font-bold ${metricTone(row.targetRate)}`}>{formatPercent(row.targetRate)}</td><td className={`px-4 py-3 text-right font-bold ${row.growthRate >= 0 ? "text-emerald-700" : "text-red-600"}`}>{row.growthRate >= 0 ? "+" : ""}{formatPercent(row.growthRate)}</td><td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${statusClasses(status)}`}>{status}</span></td><td className="px-4 py-3 text-[10px] text-slate-500">{statusAction(status)}</td></tr>; })}</tbody></table></div></div>
+  </div>;
+}
+
+function PerformanceMap({ rows, targetScale, growthMin, growthMax, endMonth, scope }: { rows: ComparisonRow[]; targetScale: number; growthMin: number; growthMax: number; endMonth: string; scope: Scope }) {
+  return <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+    <h3 className="font-extrabold text-[#172436]">Peta Kinerja Akumulasi</h3>
+    <p className="mt-1 text-[10px] text-slate-500">Posisi {scope === "program" ? "program" : "divisi"} berdasarkan capaian target dan pertumbuhan sampai {endMonth}</p>
+    <div className="mt-4 grid grid-cols-2 gap-5 px-2 text-[9px] leading-3.5">
+        <QuadrantLabel title="Bertumbuh — belum mencapai target" description="Growth positif, namun target belum tercapai." tone="amber" />
+        <QuadrantLabel title="Kinerja kuat — target tercapai dan bertumbuh" description="Target tercapai dan growth positif." tone="green" align="right" />
+    </div>
+    <div className="mt-1 h-[305px] min-w-0">
+      <ResponsiveContainer>
+        <ScatterChart margin={{ top: 10, right: 80, bottom: 8, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#CBD5E1" />
+          <ReferenceArea x1={0} x2={100} y1={0} y2={growthMax} fill="#FEF3C7" fillOpacity={0.5} />
+          <ReferenceArea x1={100} x2={targetScale} y1={0} y2={growthMax} fill="#D1FAE5" fillOpacity={0.5} />
+          <ReferenceArea x1={0} x2={100} y1={growthMin} y2={0} fill="#FEE2E2" fillOpacity={0.5} />
+          <ReferenceArea x1={100} x2={targetScale} y1={growthMin} y2={0} fill="#DBEAFE" fillOpacity={0.5} />
+          <XAxis type="number" dataKey="targetRate" domain={[0, targetScale]} tick={{ fontSize: 9 }} tickFormatter={(value) => `${value}%`} />
+          <YAxis type="number" dataKey="growthRate" domain={[growthMin, growthMax]} tick={{ fontSize: 9 }} tickFormatter={(value) => `${value}%`} label={{ value: "% Growth Akumulasi", angle: -90, position: "insideLeft", fontSize: 10, fill: "#64748B" }} />
+          <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value, name) => [formatPercent(Number(value)), name === "targetRate" ? "% Target Akumulasi" : "% Growth Akumulasi"]} labelFormatter={(_, payload) => payload[0]?.payload?.label ?? ""} />
+          <ReferenceLine x={100} stroke="#64748B" strokeDasharray="5 4" />
+          <ReferenceLine y={0} stroke="#64748B" strokeDasharray="5 4" />
+          <Scatter data={rows} fill={ORANGE}>
+            <LabelList dataKey="label" position="right" style={{ fill: "#334155", fontSize: 8, fontWeight: 700 }} />
+          </Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+    <div className="-mt-0.5 grid grid-cols-[1fr_auto_1fr] items-start gap-4 px-2 text-[9px] leading-3.5">
+      <QuadrantLabel title="Prioritas — target dan growth rendah" description="Belum mencapai target dan growth negatif." tone="red" />
+      <p className="pt-1 text-center text-[10px] font-medium text-slate-500">% Target Akumulasi</p>
+      <QuadrantLabel title="Jaga tren — target tercapai, growth menurun" description="Target tercapai, namun growth negatif." tone="blue" align="right" />
+    </div>
+  </div>;
+}
+
+function QuadrantLabel({ title, description, tone, align = "left" }: { title: string; description: string; tone: "green" | "amber" | "red" | "blue"; align?: "left" | "right" }) {
+  const color = tone === "green" ? "text-emerald-800" : tone === "amber" ? "text-amber-800" : tone === "red" ? "text-red-700" : "text-blue-800";
+  return <div className={`${align === "right" ? "text-right" : "text-left"} ${color}`}><p className="font-extrabold">{title}</p><p className="mt-0.5 font-medium opacity-75">{description}</p></div>;
+}
+
+function ChartPanel({ title, children }: { title: string; children: ReactNode }) {
+  return <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-extrabold text-[#172436]">{title}</h3><div className="mt-4 h-[340px]">{children}</div></div>;
 }

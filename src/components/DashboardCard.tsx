@@ -1,14 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Target } from "lucide-react";
+import { ClipboardList, HandCoins, HandHeart, HeartHandshake, MapPinned, Store, Target, TrendingUp, Users, type LucideIcon } from "lucide-react";
 import { Metric, formatNumber, percentage } from "@/data/dashboard";
 import { achievementTone } from "@/lib/achievement-tone";
+
+const OBJECTIVE_ICONS: Record<string, LucideIcon> = {
+  "desa-berdaya": MapPinned,
+  "garis-kemiskinan": TrendingUp,
+  muzzaki: HandHeart,
+  munfik: HandCoins,
+  bummas: Store,
+  "peserta-program": Users,
+  "peserta-layanan-program": ClipboardList,
+  mualaf: HeartHandshake,
+};
 
 export function DashboardCard({ metric, dataThroughLabel, isDataAvailable = true }: { metric: Metric; dataThroughLabel?: string; isDataAvailable?: boolean }) {
   const percent = isDataAvailable ? percentage(metric) : 0;
   const tone = achievementTone(percent);
   const href = metric.id === "peserta-program" ? "/ikhtisar-pp-plp" : metric.id === "desa-berdaya" ? "/peta-sebaran" : `/${metric.id}`;
+  const ObjectiveIcon = OBJECTIVE_ICONS[metric.id] ?? Target;
 
   return (
     <Link
@@ -22,8 +34,8 @@ export function DashboardCard({ metric, dataThroughLabel, isDataAvailable = true
           <h3 className="mt-2 text-xl font-semibold text-ink">{metric.title}</h3>
           <p className="mt-2 text-sm text-slate-500">{metric.description}</p>
         </div>
-        <div className="rounded-2xl p-3 text-white" style={{ backgroundColor: metric.color }}>
-          <ArrowUpRight size={18} />
+        <div className="rounded-2xl p-3 text-white shadow-lg transition-transform duration-300 group-hover:scale-105" style={{ backgroundColor: metric.color }} title={metric.title}>
+          <ObjectiveIcon size={20} strokeWidth={2.1} />
         </div>
       </div>
 

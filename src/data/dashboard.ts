@@ -31,7 +31,7 @@ const rawMetrics = [
   ["garis-kemiskinan", "Keluar dari Garis Kemiskinan", "GK", 0, 0, "orang", "Penerima manfaat yang mengalami peningkatan taraf hidup.", "#EF6C00", 0],
   ["peserta-program", "Peserta Program", "PP", 0, 0, "orang", "Peserta pada seluruh program pemberdayaan RZ.", "#D84315", 0],
   ["pp-terbina", "Peserta Program Terbina", "PP Terbina", 0, 0, "orang", "Peserta program yang memperoleh pembinaan secara berkelanjutan.", "#C2410C", 0],
-  ["peserta-layanan-program", "Peserta Layanan Program", "PLP", 0, 0, "layanan", "Layanan yang diberikan kepada penerima manfaat program.", "#F4511E", 0],
+  ["peserta-layanan-program", "Peserta Layanan Program", "PLP", 0, 0, "orang", "Peserta yang menerima layanan program pemberdayaan.", "#F4511E", 0],
   ["mualaf", "Mualaf", "Mualaf", 0, 0, "orang", "Mualaf yang didampingi melalui pembinaan.", "#FF7043", 0],
 ] as const;
 

@@ -156,8 +156,9 @@ export function SmartAssistant() {
     } finally { setIsSending(false); }
   };
 
-  const providerText = status?.label || (status ? "Provider belum terhubung" : "Memeriksa koneksi…");
-  const detailText = status?.planType ? `${providerText} · ${status.planType}` : providerText;
+  const detailText = status?.connected
+    ? status.model?.toLowerCase().includes("gpt-5.6-luna") ? "Chat GPT 5.6 Luna" : status.model || "Model AI terhubung"
+    : status ? "Model AI belum terhubung" : "Memeriksa koneksi…";
 
   return <>
     {!isOpen && <button type="button" onClick={() => setIsOpen(true)} className="fixed bottom-6 right-5 z-[70] flex items-center gap-2 rounded-full bg-gradient-to-r from-[#D84315] to-[#F26A2E] px-5 py-3.5 font-semibold text-white shadow-xl shadow-orange-900/25 transition hover:-translate-y-0.5 hover:shadow-2xl" aria-label="Buka Asisten Data Program RZ"><MessageCircle size={20} /><span className="hidden sm:inline">Asisten Program RZ</span></button>}

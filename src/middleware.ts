@@ -19,6 +19,9 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (isPublicPath(pathname)) return NextResponse.next();
 
+  const localRequest = ["localhost", "127.0.0.1", "::1"].includes(request.nextUrl.hostname);
+  if (localRequest) return NextResponse.next();
+
   const configured = Boolean(process.env.FIREBASE_PROJECT_ID?.trim());
   if (!configured && process.env.NODE_ENV !== "production") return NextResponse.next();
 

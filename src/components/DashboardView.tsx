@@ -91,16 +91,12 @@ export function DashboardView() {
 
   const dashboardMetrics = useMemo(() => {
     const sheetMetrics = new Map(sheetData?.metrics.map((metric) => [metric.id, metric]) ?? []);
-    return fallbackMetrics.filter((metric) => metric.id !== "pp-terbina").map((metric) => mergeSheetMetric(metric, sheetMetrics.get(metric.id), startMonthIndex, endMonthIndex));
+    const displayOrder = ["desa-berdaya", "garis-kemiskinan", "muzzaki", "munfik", "bummas", "peserta-program", "peserta-layanan-program", "mualaf"];
+    return fallbackMetrics
+      .filter((metric) => metric.id !== "pp-terbina")
+      .sort((first, second) => displayOrder.indexOf(first.id) - displayOrder.indexOf(second.id))
+      .map((metric) => mergeSheetMetric(metric, sheetMetrics.get(metric.id), startMonthIndex, endMonthIndex));
   }, [endMonthIndex, sheetData, startMonthIndex]);
-
-  const aggregatePercentage = useMemo(() => {
-    const totals = dashboardMetrics.reduce((result, metric) => ({
-      target: result.target + metric.target,
-      achievement: result.achievement + metric.achievement,
-    }), { target: 0, achievement: 0 });
-    return totals.target > 0 ? Math.round((totals.achievement / totals.target) * 100) : 0;
-  }, [dashboardMetrics]);
 
   const year = sheetData?.year ?? new Date().getFullYear();
   const months = sheetData?.months ?? ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli"];
@@ -113,7 +109,6 @@ export function DashboardView() {
   const ppTerbina = mergeSheetMetric(ppTerbinaFallback, sheetData?.metrics.find((metric) => metric.id === "pp-terbina"), startMonthIndex, endMonthIndex);
   const isPpTerbinaAvailable = Boolean(sheetData?.metrics.some((metric) => metric.id === "pp-terbina"));
   const ppTerbinaPercentage = ppTerbina.target > 0 ? Math.round((ppTerbina.achievement / ppTerbina.target) * 100) : 0;
-  const aggregateTone = achievementTone(aggregatePercentage);
   const ppTerbinaTone = achievementTone(ppTerbinaPercentage);
 
   return (
@@ -132,7 +127,7 @@ export function DashboardView() {
               <p className="mt-4 text-sm text-white/70 md:text-base">Pantau target, capaian, dan dampak program pemberdayaan dalam tampilan eksekutif yang ringkas, profesional, dan mudah ditelusuri hingga data detail.</p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link href="/ikhtisar-pp-plp" className="inline-flex items-center gap-2 rounded-xl bg-[#D84315] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#D84315]/30 transition hover:bg-[#BF360C] hover:shadow-xl">Lihat Ikhtisar PP <ArrowUpRight size={16} /></Link>
-                <Link href="/peta-sebaran" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"><MapPinned size={16} /> Peta Sebaran</Link>
+                <Link href="/peta-sebaran" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"><MapPinned size={16} /> Desa Berdaya</Link>
               </div>
             </div>
 
@@ -146,8 +141,6 @@ export function DashboardView() {
                 <PeriodMonthSelect label="Bulan akhir" value={endMonthIndex} months={months} latestMonthIndex={sheetData?.latestMonthIndex ?? 6} minimum={startMonthIndex} onChange={setEndMonthIndex} disabled={!sheetData} />
               </div>
               <p className="mt-2 min-h-4 text-center text-[11px] font-medium text-white/60">{displayedPeriod}</p>
-              <div className="mt-4 h-2 rounded-full bg-white/10"><div className="h-2 rounded-full" style={{ width: `${Math.min(aggregatePercentage, 100)}%`, backgroundColor: aggregateTone.color }} /></div>
-              <div className="mt-2 flex items-center justify-between text-xs"><span className="text-white/60">Agregat capaian</span><span className="min-w-8 text-right font-semibold" style={{ color: aggregateTone.color }}>{sheetData ? `${aggregatePercentage}%` : ""}</span></div>
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3 text-[11px] text-white/50">
                 <span>{isLoading ? "Mengambil Google Sheets…" : sheetData ? "Sumber: Google Sheets" : "Data belum tersedia"}</span>
                 <button onClick={() => void loadDashboard()} disabled={isLoading} aria-label="Muat ulang data dashboard" className="rounded-lg p-1.5 transition hover:bg-white/10 disabled:opacity-50"><RefreshCw size={13} className={isLoading ? "animate-spin" : ""} /></button>

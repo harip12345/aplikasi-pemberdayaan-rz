@@ -126,6 +126,13 @@ function villageTypeFromRow(row: CsvRecord): VillageType {
   return "Tidak diketahui";
 }
 
+function volunteerStatusFromRow(row: CsvRecord): VillageProfile["volunteer"]["status"] {
+  const status = (row["Status RI"] || row["Status Relawan Inspirasi"] || "").trim().toLowerCase();
+  if (["aktif", "active"].includes(status)) return "Aktif";
+  if (["tidak aktif", "nonaktif", "non aktif", "inactive"].includes(status)) return "Tidak aktif";
+  return "Tidak diketahui";
+}
+
 function programsFromRow(row: CsvRecord) {
   const indicatorColumns = [
     "Capacity Building",
@@ -181,6 +188,7 @@ function toVillage(row: CsvRecord, index: number, center: [number, number]): Vil
       role: "Relawan Inspirasi",
       phone: row["No Kontak"] || "Belum tersedia",
       since: 0,
+      status: volunteerStatusFromRow(row),
     },
     programs: programsFromRow(row),
     participants: 0,

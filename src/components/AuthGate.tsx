@@ -8,6 +8,8 @@ type AuthPayload = { user?: { role?: string; status?: string } };
 export function AuthGate() {
   const pathname = usePathname();
   useEffect(() => {
+    const localRequest = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+    if (localRequest) return;
     if (process.env.NODE_ENV !== "production" && !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) return;
     let active = true;
     void fetch("/api/auth/me", { cache: "no-store" }).then(async (response) => {

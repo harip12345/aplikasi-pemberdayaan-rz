@@ -14,6 +14,7 @@ export type VillageProfile = {
     role: string;
     phone: string;
     since: number;
+    status: "Aktif" | "Tidak aktif" | "Tidak diketahui";
   };
   programs: string[];
   participants: number;
@@ -119,6 +120,7 @@ function createVillages(provinceId: string, provinceName: string, count: number,
         role: "Relawan Inspirasi",
         phone: `08${String(1200000000 + index * 173 + provinceName.length * 29).slice(0, 10)}`,
         since: 2019 + (index % 6),
+        status: "Aktif",
       },
       programs,
       participants: 45 + ((index * 37 + provinceName.length * 11) % 540),
