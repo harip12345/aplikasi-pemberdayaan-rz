@@ -49,7 +49,7 @@ function MapFilterSelect({ label, value, options, allLabel, onChange }: { label:
 }
 
 export default function PetaSebaranPage() {
-  const cachedDistribution = getCachedJsonSnapshot<DistributionResponse>("distribution-sheet-production-v3");
+  const cachedDistribution = getCachedJsonSnapshot<DistributionResponse>("distribution-sheet-production-v4");
   const [distribution, setDistribution] = useState<DistributionResponse | null>(cachedDistribution);
   const [isLoading, setIsLoading] = useState(!cachedDistribution);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -72,7 +72,7 @@ export default function PetaSebaranPage() {
     setLoadError(null);
 
     try {
-      const payload = await fetchCachedJson<DistributionResponse>("distribution-sheet-production-v3", "/api/distribution", forceRefresh);
+      const payload = await fetchCachedJson<DistributionResponse>("distribution-sheet-production-v4", "/api/distribution", forceRefresh);
       setDistribution(payload);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Data tidak dapat dimuat.");
@@ -84,7 +84,7 @@ export default function PetaSebaranPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetchCachedJson<DistributionResponse>("distribution-sheet-production-v3", "/api/distribution")
+    fetchCachedJson<DistributionResponse>("distribution-sheet-production-v4", "/api/distribution")
       .then((payload) => {
         if (!cancelled) setDistribution(payload);
       })
@@ -172,7 +172,7 @@ export default function PetaSebaranPage() {
     const counts = new Map<string, number>();
     filteredProvinceDistributions.forEach((province) => {
       province.villages.forEach((village) => {
-        village.programs.forEach((program) => counts.set(program, (counts.get(program) ?? 0) + 1));
+        village.programs.forEach((program) => counts.set(program, (counts.get(program) ?? 0) + (village.programUnits?.[program] ?? 1)));
       });
     });
 
@@ -194,8 +194,9 @@ export default function PetaSebaranPage() {
     villages.forEach((village) => {
       if (village.programs.length > 1) integratedVillages += 1;
       village.programs.forEach((program) => {
-        programPoints += 1;
-        programCounts.set(program, (programCounts.get(program) ?? 0) + 1);
+        const units = village.programUnits?.[program] ?? 1;
+        programPoints += units;
+        programCounts.set(program, (programCounts.get(program) ?? 0) + units);
       });
     });
 
@@ -234,6 +235,11 @@ export default function PetaSebaranPage() {
         .map((village) => ({ provinceName: province.name, village })),
     );
   }, [filteredProvinceDistributions, selectedProgram, selectedProgramQuery]);
+
+  const selectedProgramUnitCount = useMemo(() => selectedProgramVillages.reduce(
+    (total, { village }) => total + (selectedProgram ? village.programUnits?.[selectedProgram] ?? 1 : 0),
+    0,
+  ), [selectedProgram, selectedProgramVillages]);
 
   const filteredVillages = useMemo(() => {
     if (!selectedProvince) return [];
@@ -439,7 +445,7 @@ export default function PetaSebaranPage() {
               <div>
                 <p className="text-sm font-semibold text-[#D84315]">Program Desa Berdaya</p>
                 <h2 className="mt-1 text-2xl font-bold text-ink">{selectedProgram}</h2>
-                <p className="mt-1 text-sm text-slate-500">{formatNumber(selectedProgramVillages.length)} titik program ditemukan</p>
+                <p className="mt-1 text-sm text-slate-500">{formatNumber(selectedProgramUnitCount)} titik program di {formatNumber(selectedProgramVillages.length)} desa ditemukan</p>
               </div>
               <button onClick={() => setSelectedProgram(null)} aria-label="Tutup daftar program" className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><X size={20} /></button>
             </div>

@@ -61,12 +61,13 @@ Aplikasi saat ini memakai sumber berikut:
 |---|---|
 | Target dan Capaian Dashboard | Target tahunan dan capaian bulanan program |
 | Peserta Program | Program, subprogram, asnaf, periode, cabang, dan wilayah |
+| Analisa Capaian PP dan PLP | Ringkasan kinerja per program/divisi serta tren bulanan PP per program dan divisi |
 | Desa Berdaya | Desa, status, tipe, program, cabang, dan Relawan Inspirasi |
 | Munfik | Tiga blok sumber: Empowerment, Progdis, dan Dakwah |
 | Muzaki, Mualaf, PP Terbina, BUMMas | Dataset detail per indikator |
 | Keluar Garis Kemiskinan | Data peserta dan rekap multitahun |
-| Dampak Vokasi dan Hafidz | Outcome pendidikan |
-| Bank Sampah dan Mangrove | Outcome lingkungan |
+| Dampak Vokasi dan Hafidz | Peserta terserap kerja, berwirausaha, dan Hafidz 30 juz |
+| Bank Sampah, Mangrove, dan Masjid Berdaya | Outcome lingkungan dan dakwah beserta detail wilayah yang tersedia |
 | Katalog Program Rumah Zakat 2026 | Pengetahuan program untuk chatbot |
 | Website resmi Rumah Zakat | Rujukan informasi program dan lembaga |
 
@@ -77,9 +78,10 @@ Konfigurasi spreadsheet dipusatkan pada `src/lib/data-catalog.ts` dan dapat diga
 - Peserta Program dihitung dengan **SUM kolom JUMLAH**, bukan jumlah baris atau nama unik.
 - Munfik dihitung dari **jumlah seluruh baris valid** pada tiga blok sumber, bukan nominal.
 - Mualaf dihitung dari baris dengan **Nama PM terisi**, tanpa membuat nama unik.
-- BUMMas dihitung dari seluruh baris valid dengan **bidang usaha/program terisi**.
-- Desa Aktif mengikuti status `Aktif`; titik program menghitung hubungan desa dengan program.
+- BUMMas detail dihitung dari seluruh baris valid dengan **bidang usaha/program terisi**. Pada sumber Desa Berdaya, nilai seperti `2 BUMMas` dihitung sebagai dua unit.
+- Desa Aktif mengikuti status `Aktif`; titik program menjumlahkan unit pada setiap hubungan desa dengan program.
 - Target Dashboard diambil satu kali sebagai target tahunan, sedangkan capaian dijumlahkan menurut periode bulan terpilih.
+- Analisa periode PP menjumlahkan target, capaian, dan history setiap bulan. Persentase tahunan/akumulasi hanya mengambil snapshot bulan terakhir dan tidak dijumlahkan.
 - Nilai kosong dibedakan dari nilai nol.
 
 Kamus lengkap beserta alias pencarian tersedia di `src/lib/metric-dictionary.ts`.
@@ -176,9 +178,11 @@ CODEX_AUTH_REFRESH_SKEW_MS
 BLOB_STORE_ID
 BLOB_READ_WRITE_TOKEN
 CRON_SECRET
+TAVILY_API_KEY
 ```
 
 Provider alternatif yang tersedia: Groq, OpenRouter, 9Router, dan custom OpenAI-compatible endpoint.
+`TAVILY_API_KEY` bersifat opsional dan hanya digunakan untuk pencarian web eksternal pada domain institusional tepercaya. Website resmi Rumah Zakat tetap dicari langsung tanpa API key.
 
 ### Telegram
 
@@ -211,8 +215,14 @@ Chatbot dirancang untuk menjawab antara lain:
 - “Kota dengan jumlah Muzaki terbanyak?”
 - “Apa itu program Rumah Vokasi?”
 - “Apakah data Dashboard dan detail sudah cocok?”
+- “Program PP mana yang paling tertinggal dari target dan apa prioritas tindak lanjutnya?”
+- “Bandingkan kinerja PP per divisi sampai Agustus.”
+- “Bagaimana tren bulanan PP dibanding target dan capaian tahun lalu?”
+- “Berapa peserta vokasi terserap kerja dan berwirausaha?”
 
-Pertanyaan angka diarahkan ke fungsi data yang sesuai. Jawaban menyertakan periode dan sumber. Normalisasi mendukung singkatan serta variasi ejaan umum seperti PM/PP, Muzaki/Muzzaki, Munfik/Munfiq, dan nama wilayah singkat.
+Pertanyaan angka diarahkan ke fungsi data yang sesuai. Jawaban menyertakan periode dan sumber. Untuk pertanyaan analitis, chatbot memisahkan temuan data, interpretasi, dan rekomendasi; membandingkan target, history, growth, kontribusi, tren, dan gap; serta menyatakan keterbatasan data sebelum memberi saran. Normalisasi mendukung singkatan serta variasi ejaan umum seperti PM/PP, Muzaki/Muzzaki, Munfik/Munfiq, dan nama wilayah singkat.
+
+Untuk pertanyaan gabungan, angka capaian tetap diambil dari Google Sheets, sedangkan benchmark, regulasi, SDGs/CSR, dan praktik eksternal dicari melalui Tavily hanya pada domain tepercaya. Backend membuka maksimal tiga halaman teratas, memilih potongan yang relevan, memeriksa metadata tanggal, lalu menyusun jawaban dalam bagian Fakta internal, Konteks eksternal, Interpretasi, Rekomendasi, dan Sumber. Website resmi Rumah Zakat tetap dapat dicari tanpa Tavily.
 
 ### Persistensi Codex di Vercel
 

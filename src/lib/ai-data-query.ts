@@ -301,7 +301,7 @@ export async function queryDetailData(input: DetailDataQuery, forceRefresh = fal
 }
 
 export async function queryDistributionData(input: DistributionDataQuery, forceRefresh = false) {
-  const sourceData = await getServerCachedData("distribution", getDistributionFromGoogleSheets, forceRefresh);
+  const sourceData = await getServerCachedData("distribution-ai-v2", getDistributionFromGoogleSheets, forceRefresh);
   const villages = sourceData.provinces.flatMap((province) => province.villages.map((village) => ({ ...village, province: province.name })));
   const matchProvince = createDimensionMatcher(input.province, villages.map((village) => village.province));
   const matchCity = createDimensionMatcher(input.city, villages.map((village) => village.regency));
@@ -317,7 +317,11 @@ export async function queryDistributionData(input: DistributionDataQuery, forceR
   const groups = new Map<string, number>();
   if (input.groupBy) records.forEach((village) => {
     const keys = input.groupBy === "program" ? village.programs : [input.groupBy === "province" ? village.province : input.groupBy === "city" ? village.regency : input.groupBy === "district" ? village.district : input.groupBy === "branch" ? village.branch : input.groupBy === "status" ? village.status : village.villageType];
-    keys.forEach((key) => groups.set(normalizeDataTerm(key) || "Tidak terisi", (groups.get(normalizeDataTerm(key) || "Tidak terisi") ?? 0) + 1));
+    keys.forEach((key) => {
+      const normalizedKey = normalizeDataTerm(key) || "Tidak terisi";
+      const units = input.groupBy === "program" ? village.programUnits?.[key] ?? 1 : 1;
+      groups.set(normalizedKey, (groups.get(normalizedKey) ?? 0) + units);
+    });
   });
   const source = resolvedDataSource("distribution");
   const resultLimit = Math.max(1, Math.min(200, input.limit ?? 50));
@@ -333,7 +337,7 @@ export async function queryDistributionData(input: DistributionDataQuery, forceR
   })) : [];
   return {
     source: "distribution" as const, totalVillages: records.length, activeVillages: records.filter((village) => village.status === "Aktif").length,
-    programPoints: records.reduce((sum, village) => sum + village.programs.length, 0), groups: input.groupBy ? sortedGroups(groups, input.limit) : [],
+    programPoints: records.reduce((sum, village) => sum + village.programs.reduce((programTotal, program) => programTotal + (village.programUnits?.[program] ?? 1), 0), 0), groups: input.groupBy ? sortedGroups(groups, input.limit) : [],
     villages: villageResults, returnedVillages: villageResults.length, villagesTruncated: input.includeVillages ? records.length > villageResults.length : false,
     filters: { province: input.province, city: input.city, district: input.district, branch: input.branch, status: input.status, villageType: input.villageType, program: input.program, search: input.search },
     resolvedFilters: {
@@ -342,7 +346,7 @@ export async function queryDistributionData(input: DistributionDataQuery, forceR
       status: input.status ? uniqueValues(records.map((village) => village.status)) : [], villageType: input.villageType ? uniqueValues(records.map((village) => village.villageType)) : [],
       program: input.program ? uniqueValues(records.flatMap((village) => village.programs.filter((programName) => matchProgram(programName)))) : [],
     },
-    calculation: input.groupBy === "program" ? "Setiap relasi desa-program dihitung sebagai satu titik program." : input.includeVillages ? "Setiap desa yang sesuai filter dihitung satu kali dan detail desa dikembalikan sesuai batas hasil." : "Setiap desa yang sesuai filter dihitung satu kali.",
+    calculation: input.groupBy === "program" ? "Setiap relasi desa-program dihitung menurut jumlah unit pada sumber; nilai seperti 2 BUMMas dihitung sebagai dua titik program." : input.includeVillages ? "Setiap desa yang sesuai filter dihitung satu kali dan detail desa dikembalikan sesuai batas hasil." : "Setiap desa yang sesuai filter dihitung satu kali.",
     quality: { isValid: true, rowsRead: villages.length, rowsAccepted: records.length, rowsRejected: villages.length - records.length, checkedAt: new Date().toISOString(), issues: [] },
     provenance: { sourceId: "distribution", sourceLabel: source.label, spreadsheetId: source.spreadsheetId, gid: source.gid, sheetUrl: source.sheetUrl, updatedAt: sourceData.updatedAt },
   };

@@ -149,13 +149,30 @@ function programsFromRow(row: CsvRecord) {
     "Masjid Berdaya",
   ];
   const aliases: Record<string, string> = { CB: "Capacity Building", BUMMas: "Bummas", "2 BUMMas": "Bummas", "Ramah Lansia": "Desa Ramah Lansia", "Bebas Stunting": "Desa Bebas Stunting" };
+  const canonicalProgram = (value: string) => {
+    const trimmed = value.trim();
+    if (/^\d+\s*bummas$/i.test(trimmed) || /^bummas$/i.test(trimmed)) return "Bummas";
+    return aliases[trimmed] ?? trimmed;
+  };
+  const unitCount = (program: string, rawValue: string) => {
+    if (program !== "Bummas") return 1;
+    const labeledCount = rawValue.match(/\b(\d+)\s*bummas\b/i)?.[1];
+    const numericCount = rawValue.trim().match(/^\d+$/)?.[0];
+    return Math.max(1, Number(labeledCount ?? numericCount ?? 1));
+  };
   const listedPrograms = (row.Program ?? "")
     .split(",")
-    .map((program) => aliases[program.trim()] ?? program.trim())
-    .filter(Boolean);
-  const indicatedPrograms = indicatorColumns.filter((column) => Boolean(row[column]));
+    .map((rawValue) => ({ rawValue: rawValue.trim(), program: canonicalProgram(rawValue) }))
+    .filter(({ program }) => Boolean(program));
+  const indicatedPrograms = indicatorColumns
+    .filter((column) => Boolean(row[column]))
+    .map((column) => ({ rawValue: row[column], program: canonicalProgram(column) }));
+  const programUnits = [...listedPrograms, ...indicatedPrograms].reduce<Record<string, number>>((counts, { program, rawValue }) => {
+    counts[program] = Math.max(counts[program] ?? 0, unitCount(program, rawValue));
+    return counts;
+  }, {});
 
-  return [...new Set([...listedPrograms, ...indicatedPrograms])];
+  return { programs: Object.keys(programUnits), programUnits };
 }
 
 function stableOffset(seed: string, scale: number) {
@@ -175,6 +192,8 @@ function toVillage(row: CsvRecord, index: number, center: [number, number]): Vil
   const villageName = row.Desa || `Desa tanpa nama ${index + 1}`;
   const sourceId = row.ID_Desa_ || row.ID_Desa || String(index + 1);
 
+  const programData = programsFromRow(row);
+
   return {
     id: `${slugify(province)}-${sourceId}`,
     name: villageName,
@@ -190,7 +209,8 @@ function toVillage(row: CsvRecord, index: number, center: [number, number]): Vil
       since: 0,
       status: volunteerStatusFromRow(row),
     },
-    programs: programsFromRow(row),
+    programs: programData.programs,
+    programUnits: programData.programUnits,
     participants: 0,
     status: statusFromRow(row),
     villageType: villageTypeFromRow(row),

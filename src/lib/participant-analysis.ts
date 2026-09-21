@@ -154,12 +154,12 @@ function parseMonthlyGroups(csv: string, keyColumn: number, label: (value: strin
 export async function getParticipantAnalysisData(): Promise<ParticipantAnalysisData> {
   const { spreadsheetId, gid } = resolvedDataSource("participant-analysis");
   const sourceUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${gid}#gid=${gid}`;
-  const programMonthlyGid = process.env.GOOGLE_SHEETS_PP_ANALYSIS_PROGRAM_MONTHLY_GID || "431216403";
-  const divisionMonthlyGid = process.env.GOOGLE_SHEETS_PP_ANALYSIS_DIVISION_MONTHLY_GID || "550193821";
+  const programMonthlySource = resolvedDataSource("participant-analysis-program-monthly");
+  const divisionMonthlySource = resolvedDataSource("participant-analysis-division-monthly");
   const [csv, programMonthlyCsv, divisionMonthlyCsv] = await Promise.all([
     fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`),
-    fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${programMonthlyGid}`),
-    fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${divisionMonthlyGid}`),
+    fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${programMonthlySource.spreadsheetId}/export?format=csv&gid=${programMonthlySource.gid}`),
+    fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${divisionMonthlySource.spreadsheetId}/export?format=csv&gid=${divisionMonthlySource.gid}`),
   ]);
   const [header = [], ...rawRows] = parseCsv(csv.replace(/^\uFEFF/, ""));
 
@@ -197,8 +197,8 @@ export async function getParticipantAnalysisData(): Promise<ParticipantAnalysisD
       programs: monthlyPrograms,
       divisions: monthlyDivisions,
       latestMonthIndex,
-      programSourceUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${programMonthlyGid}#gid=${programMonthlyGid}`,
-      divisionSourceUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${divisionMonthlyGid}#gid=${divisionMonthlyGid}`,
+      programSourceUrl: programMonthlySource.sheetUrl,
+      divisionSourceUrl: divisionMonthlySource.sheetUrl,
     },
     year,
     updatedAt: new Date().toISOString(),

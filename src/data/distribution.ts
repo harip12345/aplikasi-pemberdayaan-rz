@@ -17,6 +17,7 @@ export type VillageProfile = {
     status: "Aktif" | "Tidak aktif" | "Tidak diketahui";
   };
   programs: string[];
+  programUnits?: Record<string, number>;
   participants: number;
   status: VillageStatus;
   villageType: VillageType;

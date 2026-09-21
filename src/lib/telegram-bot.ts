@@ -132,9 +132,16 @@ async function sendTyping(chatId: number) {
   await telegramRequest("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => undefined);
 }
 
-function sourceAppendix(sources: Array<{ label: string; url: string }>) {
+function sourceAppendix(sources: Array<{ label: string; title?: string; domain?: string; url: string; publishedAt?: string; publicationDateStatus?: "available" | "unavailable" }>) {
   const unique = [...new Map(sources.map((source) => [source.url, source])).values()];
-  return unique.length ? `\n\nSumber data:\n${unique.map((source) => `• ${source.label}: ${source.url}`).join("\n")}` : "";
+  return unique.length ? `\n\nSumber data:\n${unique.map((source) => {
+    const parsedDate = source.publishedAt ? new Date(source.publishedAt) : null;
+    const dateLabel = source.publicationDateStatus === "unavailable" || !parsedDate || Number.isNaN(parsedDate.getTime())
+      ? "tanggal publikasi tidak tersedia"
+      : parsedDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
+    const metadata = source.domain ? ` — ${source.domain}; ${dateLabel}` : "";
+    return `• ${source.title || source.label}${metadata}: ${source.url}`;
+  }).join("\n")}` : "";
 }
 
 async function nationalReportingPeriod(): Promise<ReportingPeriod | undefined> {

@@ -5,7 +5,17 @@ import { AlertCircle, Bot, CheckCircle2, Copy, Database, ExternalLink, Loader2, 
 import { useReportingPeriod } from "@/components/ReportingPeriodContext";
 import { REPORTING_MONTHS, reportingPeriodLabel } from "@/lib/reporting-period";
 
-type SourceLink = { label: string; url: string; updatedAt: string };
+type SourceLink = {
+  label: string;
+  title?: string;
+  domain?: string;
+  url: string;
+  updatedAt: string;
+  publishedAt?: string;
+  accessedAt?: string;
+  publicationDateStatus?: "available" | "unavailable";
+  sourceType?: string;
+};
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; sources?: SourceLink[]; usedTools?: string[] };
 type ProviderStatus = { label?: string; model?: string; connected: boolean; loginAvailable?: boolean; canManageLogin?: boolean; planType?: string | null; message?: string };
 type LoginCode = { verificationUrl: string; userCode: string };
@@ -21,6 +31,14 @@ function InlineText({ children }: { children: string }) {
 
 function MessageContent({ content }: { content: string }) {
   return <div className="space-y-1 whitespace-pre-wrap">{content.split("\n").map((line, index) => <div key={index} className={line.trim().startsWith("-") ? "pl-1" : ""}><InlineText>{line || " "}</InlineText></div>)}</div>;
+}
+
+function sourceDateLabel(source: SourceLink) {
+  if (source.publicationDateStatus === "unavailable") return "Tanggal publikasi tidak tersedia";
+  const rawDate = source.publishedAt || source.updatedAt;
+  if (!rawDate) return source.sourceType?.includes("web") || source.sourceType === "official-rumah-zakat" ? "Tanggal publikasi tidak tersedia" : "";
+  const parsed = new Date(rawDate);
+  return Number.isNaN(parsed.getTime()) ? "Tanggal publikasi tidak tersedia" : parsed.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
 export function SmartAssistant() {
@@ -196,7 +214,7 @@ export function SmartAssistant() {
           </div>
           <div className="grid gap-2">{suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={status?.connected === false} onClick={() => void sendMessage(suggestion)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-medium leading-5 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}</div>
         </div>}
-        <div className="space-y-3">{messages.map((message) => <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-[#D84315] text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-sm"}`}><MessageContent content={message.content} />{message.role === "assistant" && Boolean(message.sources?.length) && <div className="mt-3 border-t border-slate-100 pt-2"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Sumber data</p>{message.sources!.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 py-0.5 text-[11px] font-semibold text-[#D84315] hover:underline"><ExternalLink size={11} />{source.label}</a>)}</div>}</div></div>)}</div>
+        <div className="space-y-3">{messages.map((message) => <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-[#D84315] text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-sm"}`}><MessageContent content={message.content} />{message.role === "assistant" && Boolean(message.sources?.length) && <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sumber data</p>{message.sources!.map((source) => { const dateLabel = sourceDateLabel(source); return <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex items-start gap-1.5 rounded-lg px-1 py-1 text-[#D84315] transition hover:bg-orange-50"><ExternalLink size={11} className="mt-1 shrink-0" /><span className="min-w-0"><span className="block text-[11px] font-semibold leading-4">{source.title || source.label}</span><span className="block text-[9px] font-medium leading-4 text-slate-400">{[source.domain || source.label, dateLabel].filter(Boolean).join(" · ")}</span></span></a>; })}</div>}</div></div>)}</div>
         {isSending && <div className="mt-3 flex justify-start"><div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 shadow-sm"><Loader2 size={15} className="animate-spin text-[#D84315]" /> Mencari dan memeriksa data…</div></div>}
         {error && <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</div>}
       </div>

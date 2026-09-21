@@ -38,7 +38,7 @@ export const METRIC_DICTIONARY: readonly MetricDefinition[] = [
     description: "Portofolio desa pemberdayaan beserta status, tipe desa, wilayah, cabang, fasilitator, dan program.", unit: "desa", aggregation: "count_rows", periodBehavior: "snapshot",
     aliases: ["desber", "desa berdaya", "desbin", "desa binaan", "sister village", "desa kolaborasi"],
     dimensions: ["provinsi", "kota/kab", "kecamatan", "desa", "cabang", "status", "tipe desa", "program"],
-    formula: "COUNT desa yang sesuai filter. Desa aktif = COUNT dengan status Aktif. Titik program = COUNT relasi desa-program.",
+    formula: "COUNT desa yang sesuai filter. Desa aktif = COUNT dengan status Aktif. Titik program = SUM jumlah unit pada relasi desa-program; nilai seperti 2 BUMMas dihitung sebagai dua unit.",
     searchHints: ["desa aktif jawa barat", "desber hibernasi", "desa dengan rumah vokasi", "program desa berdaya"], notes: "Sumber detail adalah sheet sebaran; target/capaian ringkas tetap tersedia di Dashboard.",
   },
   {
@@ -88,6 +88,38 @@ export const METRIC_DICTIONARY: readonly MetricDefinition[] = [
     dimensions: ["bulan informasi", "kota/kab", "provinsi", "jenis kelamin", "asnaf", "cabang", "base program", "islamisasi", "mitra/relawan inspirasi"],
     formula: "COUNT seluruh baris dengan kolom Nama PM terisi; nama tidak dibuat unik.",
     searchHints: ["mualaf per provinsi", "mualaf berdasarkan gender", "mualaf per base program"], notes: "Kolom Nama PM menjadi syarat valid agar hitungan konsisten dengan capaian.",
+  },
+  {
+    id: "kinerja-peserta-program", label: "Kinerja Peserta Program", source: "participant-analysis",
+    description: "Target, capaian, history, persentase target, growth, kontribusi, dan tren PP/PLP per program atau divisi.", unit: "peserta", aggregation: "sum", periodBehavior: "cumulative",
+    aliases: ["analisa pp", "analisis pp", "kinerja pp", "growth pp", "target pp", "capaian per divisi", "capaian per program"],
+    dimensions: ["program", "divisi", "bulan", "tahun", "jenis peserta PP/PLP"],
+    formula: "Periode PP = SUM target, capaian, dan history bulanan. % target = total capaian / total target. Growth = (total capaian - total history) / total history. Kolom akumulasi dan tahunan hanya diambil dari snapshot bulan terakhir.",
+    searchHints: ["program dengan growth tertinggi", "divisi paling tertinggal", "tren bulanan pp", "gap target peserta program"], notes: "Sumber bulanan tersedia untuk PP. PLP memakai ringkasan keseluruhan karena sumber bulanan PLP belum tersedia.",
+  },
+  {
+    id: "dampak-vokasi", label: "Dampak Program Vokasi", source: "vokasi-impact",
+    description: "Peserta vokasi yang terserap kerja atau membuka usaha.", unit: "peserta", aggregation: "count_valid_rows", periodBehavior: "snapshot",
+    aliases: ["terserap kerja", "wirausaha", "berwirausaha", "dampak vokasi"], dimensions: ["status hasil", "tahun"],
+    formula: "COUNT baris peserta valid berdasarkan kolom Terserap Kerja/Membuka Usaha.", searchHints: ["peserta vokasi terserap kerja", "peserta vokasi berwirausaha"], notes: "Filter wilayah hanya digunakan bila sumber menyediakan detail lokasi.",
+  },
+  {
+    id: "pp-hafidz", label: "Peserta Program Hafidz", source: "hafidz-impact",
+    description: "Peserta program yang mencapai hafalan 30 juz.", unit: "peserta", aggregation: "count_valid_rows", periodBehavior: "snapshot",
+    aliases: ["hafidz", "hafiz", "30 juz", "pp hafidz"], dimensions: ["peserta", "capaian hafalan"],
+    formula: "COUNT baris dengan Nama PP terisi dan kolom Hafidz menyatakan 30 juz.", searchHints: ["jumlah hafidz 30 juz"], notes: "Tidak menggunakan jumlah nama unik kecuali sumber mendefinisikannya demikian.",
+  },
+  {
+    id: "dampak-lingkungan", label: "Dampak Program Lingkungan", source: "environment-impact",
+    description: "Lokasi Bank Sampah dan Mangrove pada sumber dampak lingkungan.", unit: "lokasi", aggregation: "count_valid_rows", periodBehavior: "snapshot",
+    aliases: ["bank sampah", "mangrove", "program lingkungan"], dimensions: ["desa", "kecamatan", "kota/kab", "provinsi", "cabang", "program"],
+    formula: "Bank Sampah = COUNT baris valid pada kolom U. Mangrove = COUNT baris valid pada kolom V.", searchHints: ["bank sampah per provinsi", "lokasi mangrove"], notes: "Rincian wilayah tersedia bila kolom lokasi terisi.",
+  },
+  {
+    id: "masjid-berdaya", label: "Masjid Berdaya", source: "distribution",
+    description: "Desa yang menjalankan intervensi Masjid Berdaya.", unit: "titik program", aggregation: "count_valid_rows", periodBehavior: "snapshot",
+    aliases: ["masjid berdaya", "program masjid"], dimensions: ["desa", "kecamatan", "kota/kab", "provinsi", "cabang", "status desa", "relawan inspirasi"],
+    formula: "COUNT baris Desa Berdaya dengan kolom Masjid Berdaya terisi.", searchHints: ["masjid berdaya per provinsi", "desa dengan masjid berdaya"], notes: "Sumber sama dengan Sebaran Desa Berdaya.",
   },
   {
     id: "peserta-layanan-program", label: "Peserta Layanan Program", source: "dashboard",

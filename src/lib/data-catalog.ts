@@ -1,4 +1,4 @@
-export type AiDataSourceId = "dashboard" | "participants" | "participant-analysis" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact";
+export type AiDataSourceId = "dashboard" | "participants" | "participant-analysis" | "participant-analysis-program-monthly" | "participant-analysis-division-monthly" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact";
 
 export type DataSourceDefinition = {
   id: AiDataSourceId;
@@ -39,7 +39,27 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
     gid: "722479198",
     environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ANALYSIS_ID", gid: "GOOGLE_SHEETS_PP_ANALYSIS_GID" },
     parser: "participant-achievement-analysis-v3",
-    grain: "Ringkasan PP dan PLP per program serta per divisi; kolom periode berjalan dikecualikan",
+    grain: "Ringkasan target, capaian, history, persentase target, dan growth PP/PLP per program serta per divisi",
+    refreshMode: "cached-google-sheet",
+  },
+  "participant-analysis-program-monthly": {
+    id: "participant-analysis-program-monthly",
+    label: "Analisa Bulanan Peserta Program per Program",
+    spreadsheetId: "1W0M9WD1Zk_r1F77vP1ccDivV5UQVrJbnUnursadoX8U",
+    gid: "431216403",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ANALYSIS_ID", gid: "GOOGLE_SHEETS_PP_ANALYSIS_PROGRAM_MONTHLY_GID" },
+    parser: "participant-monthly-performance-v1",
+    grain: "Satu baris program per bulan dengan target, capaian, history, persentase periode, akumulasi, dan persentase tahunan",
+    refreshMode: "cached-google-sheet",
+  },
+  "participant-analysis-division-monthly": {
+    id: "participant-analysis-division-monthly",
+    label: "Analisa Bulanan Peserta Program per Divisi",
+    spreadsheetId: "1W0M9WD1Zk_r1F77vP1ccDivV5UQVrJbnUnursadoX8U",
+    gid: "550193821",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_PP_ANALYSIS_ID", gid: "GOOGLE_SHEETS_PP_ANALYSIS_DIVISION_MONTHLY_GID" },
+    parser: "participant-monthly-performance-v1",
+    grain: "Satu baris divisi per bulan dengan target, capaian, history, persentase periode, akumulasi, dan persentase tahunan",
     refreshMode: "cached-google-sheet",
   },
   distribution: {

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const localRequest = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
   if (!localRequest) { const denied = await approvedApiGuard(); if (denied) return denied; }
   try {
-    const data = await getServerCachedData("distribution-v2", getDistributionFromGoogleSheets, isForcedDataRefresh(request));
+    const data = await getServerCachedData("distribution-v3", getDistributionFromGoogleSheets, isForcedDataRefresh(request));
     return NextResponse.json(data, {
       headers: { "Cache-Control": "no-store" },
     });
