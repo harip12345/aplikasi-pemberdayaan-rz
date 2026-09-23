@@ -175,7 +175,7 @@ export function SmartAssistant() {
   };
 
   const detailText = status?.connected
-    ? status.model?.toLowerCase().includes("gpt-5.6-luna") ? "Chat GPT 5.6 Luna" : status.model || "Model AI terhubung"
+    ? status.model?.toLowerCase().includes("gpt-6-luna") ? "Chat GPT 6 Luna" : status.model?.toLowerCase().includes("gpt-5.6-luna") ? "Chat GPT 5.6 Luna" : status.model || "Model AI terhubung"
     : status ? "Model AI belum terhubung" : "Memeriksa koneksi…";
 
   return <>

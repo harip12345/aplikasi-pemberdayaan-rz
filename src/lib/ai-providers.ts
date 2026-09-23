@@ -26,7 +26,7 @@ export function aiProviderLabel(provider = configuredAiProvider()) {
 }
 
 export function configuredCodexModel() {
-  return process.env.CODEX_MODEL?.trim() || "gpt-5.6-luna";
+  return process.env.CODEX_MODEL?.trim() || "gpt-6-luna";
 }
 
 function validateBaseUrl(value: string) {

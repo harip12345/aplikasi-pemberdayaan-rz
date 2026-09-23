@@ -121,7 +121,7 @@ Panel browser tidak menerima provider, model, base URL, atau API key. Seluruh ko
 
 - `AI_PROVIDER=codex` memakai langganan ChatGPT melalui Codex CLI.
 - `CODEX_CLI_PATH` menentukan lokasi executable jika deteksi otomatis atau perintah `codex` di `PATH` tidak tersedia. Pada Windows, aplikasi juga memeriksa folder installer resmi dan folder versi internal Codex Desktop.
-- `CODEX_MODEL` menggunakan `gpt-5.6-luna` secara default dan dapat diganti melalui environment server.
+- `CODEX_MODEL` menggunakan `gpt-6-luna` secara default dan dapat diganti melalui environment server. Pastikan runtime Codex CLI minimal `0.156.1` dan model tersedia pada workspace ChatGPT yang terhubung.
 - `CODEX_REASONING_EFFORT` mengatur tingkat penalaran Codex.
 - Untuk provider API, ubah `AI_PROVIDER` menjadi `groq`, `openrouter`, `9router`, atau `custom`, kemudian isi key, base URL, dan model terkait di `.env`.
 - `TAVILY_API_KEY` bersifat opsional. Tanpa key, pencarian website resmi Rumah Zakat tetap berjalan. Jika diisi, chatbot memakai Tavily untuk memperluas pencarian ke domain institusional tepercaya seperti BAZNAS, Kementerian Agama, Bappenas/SDGs, UNDP, PBB, OJK, dan ISO.

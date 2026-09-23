@@ -7,7 +7,7 @@ Dashboard menggunakan paket resmi `@openai/codex` dan menjalankan `codex app-ser
 ```env
 AI_PROVIDER=codex
 CODEX_ACCESS_TOKEN=
-CODEX_MODEL=gpt-5.6-luna
+CODEX_MODEL=gpt-6-luna
 CODEX_REASONING_EFFORT=low
 CODEX_TURN_TIMEOUT_MS=120000
 VERCEL_SUPPORT_LARGE_FUNCTIONS=1
