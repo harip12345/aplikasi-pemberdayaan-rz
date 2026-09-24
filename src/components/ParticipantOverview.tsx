@@ -9,12 +9,12 @@ import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache"
 import { ASNAF_FIELDS, type AsnafField, type ParticipantRow, type ParticipantSheetData } from "@/lib/participant-sheets";
 import type { ParticipantAnalysisData } from "@/lib/participant-analysis";
 import { useReportingPeriod } from "@/components/ReportingPeriodContext";
+import { MultiFilterSelect } from "@/components/MultiFilterSelect";
 
-const ALL = "Semua";
 const ParticipantCharts = dynamic(() => import("@/components/ParticipantCharts").then((module) => module.ParticipantCharts), { loading: () => <div className="h-[330px] animate-pulse rounded-[26px] bg-slate-100 xl:col-span-2" /> });
 const DEFAULT_MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli"];
 const ANALYSIS_CACHE_KEY = "participant-analysis-v7";
-type Filters = { startMonthIndex: number; endMonthIndex: number; province: string; city: string; branch: string; program: string; subProgram: string; query: string };
+type Filters = { startMonthIndex: number; endMonthIndex: number; province: string[]; city: string[]; branch: string[]; program: string[]; subProgram: string[]; query: string };
 type ReportRow = Record<AsnafField, number> & { program: string; subProgram: string; total: number; kind: "detail" | "subtotal" | "grand" };
 type BranchReportRow = Record<AsnafField, number> & { branch: string; program: string; total: number; kind: "detail" | "subtotal" | "grand" };
 type MonthlyReportRow = { program: string; subProgram: string; values: number[]; total: number; kind: "detail" | "subtotal" | "grand" };
@@ -22,6 +22,7 @@ type ReportMode = "program" | "branch" | "monthly";
 
 const formatNumber = (value: number) => new Intl.NumberFormat("id-ID").format(value);
 const unique = (values: string[]) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "id"));
+const matchesSelection = (selected: string[], value: string) => selected.length === 0 || selected.includes(value);
 
 function summarize(rows: ParticipantRow[], field: "program" | "subProgram" | "branch") {
   const totals = new Map<string, number>();
@@ -137,10 +138,6 @@ function csvCell(value: string | number) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function FilterSelect({ label, value, values, onChange }: { label: string; value: string; values: string[]; onChange: (value: string) => void }) {
-  return <label className="relative block"><span className="pointer-events-none absolute left-3 top-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 pb-1 pt-4 text-sm font-medium outline-none focus:border-[#F2662F] focus:ring-4 focus:ring-orange-100"><option value={ALL}>Semua {label.toLowerCase()}</option>{values.map((item) => <option key={item}>{item}</option>)}</select></label>;
-}
-
 function HeaderMonthSelect({ label, value, months, minimum = 0, onChange }: { label: string; value: number; months: readonly string[]; minimum?: number; onChange: (value: number) => void }) {
   return <label className="relative block"><span className="pointer-events-none absolute left-2.5 top-1 text-[8px] font-bold uppercase tracking-wider text-white/45">{label}</span><select value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-10 w-full rounded-xl border border-white/15 bg-white/10 px-2.5 pb-0.5 pt-3 text-[11px] font-semibold text-white outline-none focus:border-orange-300"><option className="text-slate-900" disabled value={-1}>Pilih bulan</option>{months.map((month, index) => <option className="text-slate-900" key={month} value={index} disabled={index < minimum}>{month}</option>)}</select></label>;
 }
@@ -152,7 +149,7 @@ export function ParticipantOverview() {
   const [analysis, setAnalysis] = useState<ParticipantAnalysisData | null>(() => getCachedJsonSnapshot<ParticipantAnalysisData>(ANALYSIS_CACHE_KEY));
   const [isLoading, setIsLoading] = useState(!cachedParticipants);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({ startMonthIndex: 0, endMonthIndex: cachedParticipants?.latestMonthIndex ?? 6, province: ALL, city: ALL, branch: ALL, program: ALL, subProgram: ALL, query: "" });
+  const [filters, setFilters] = useState<Filters>({ startMonthIndex: 0, endMonthIndex: cachedParticipants?.latestMonthIndex ?? 6, province: [], city: [], branch: [], program: [], subProgram: [], query: "" });
   const [reportMode, setReportMode] = useState<ReportMode>("program");
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
 
@@ -194,12 +191,12 @@ export function ParticipantOverview() {
   }, [data, filters.endMonthIndex, filters.startMonthIndex, setAssistantPeriod]);
 
   const periodRows = useMemo(() => data?.rows.filter((row) => row.year === data.year && row.monthIndex >= filters.startMonthIndex && row.monthIndex <= filters.endMonthIndex) ?? [], [data, filters.endMonthIndex, filters.startMonthIndex]);
-  const provinces = useMemo(() => unique(periodRows.filter((row) => filters.branch === ALL || row.branch === filters.branch).map((row) => row.province)), [filters.branch, periodRows]);
-  const cities = useMemo(() => unique(periodRows.filter((row) => (filters.branch === ALL || row.branch === filters.branch) && (filters.province === ALL || row.province === filters.province)).map((row) => row.city)), [filters.branch, filters.province, periodRows]);
-  const branches = useMemo(() => unique(periodRows.filter((row) => (filters.province === ALL || row.province === filters.province) && (filters.city === ALL || row.city === filters.city)).map((row) => row.branch)), [filters.city, filters.province, periodRows]);
+  const provinces = useMemo(() => unique(periodRows.filter((row) => matchesSelection(filters.branch, row.branch)).map((row) => row.province)), [filters.branch, periodRows]);
+  const cities = useMemo(() => unique(periodRows.filter((row) => matchesSelection(filters.branch, row.branch) && matchesSelection(filters.province, row.province)).map((row) => row.city)), [filters.branch, filters.province, periodRows]);
+  const branches = useMemo(() => unique(periodRows.filter((row) => matchesSelection(filters.province, row.province) && matchesSelection(filters.city, row.city)).map((row) => row.branch)), [filters.city, filters.province, periodRows]);
   const programs = useMemo(() => unique(periodRows.map((row) => row.program)), [periodRows]);
-  const subPrograms = useMemo(() => unique(periodRows.filter((row) => filters.program === ALL || row.program === filters.program).map((row) => row.subProgram)), [filters.program, periodRows]);
-  const rows = useMemo(() => { const query = filters.query.trim().toLowerCase(); return periodRows.filter((row) => (filters.province === ALL || row.province === filters.province) && (filters.city === ALL || row.city === filters.city) && (filters.branch === ALL || row.branch === filters.branch) && (filters.program === ALL || row.program === filters.program) && (filters.subProgram === ALL || row.subProgram === filters.subProgram) && (!query || [row.province, row.city, row.branch, row.program, row.subProgram].some((value) => value.toLowerCase().includes(query)))); }, [filters, periodRows]);
+  const subPrograms = useMemo(() => unique(periodRows.filter((row) => matchesSelection(filters.program, row.program)).map((row) => row.subProgram)), [filters.program, periodRows]);
+  const rows = useMemo(() => { const query = filters.query.trim().toLowerCase(); return periodRows.filter((row) => matchesSelection(filters.province, row.province) && matchesSelection(filters.city, row.city) && matchesSelection(filters.branch, row.branch) && matchesSelection(filters.program, row.program) && matchesSelection(filters.subProgram, row.subProgram) && (!query || [row.province, row.city, row.branch, row.program, row.subProgram].some((value) => value.toLowerCase().includes(query)))); }, [filters, periodRows]);
 
   const total = useMemo(() => rows.reduce((sum, row) => sum + row.total, 0), [rows]);
   const isDataAvailable = Boolean(data);
@@ -221,16 +218,16 @@ export function ParticipantOverview() {
   const periodLabel = data ? `1 ${months[filters.startMonthIndex]} ${year} - ${lastDay} ${months[filters.endMonthIndex]} ${year}` : "";
   const annualTargetRate = analysis?.totals.pp.achievementRate ?? null;
   const annualGrowthRate = analysis?.totals.pp.growthRate ?? null;
-  const hasScopedFilter = filters.province !== ALL || filters.city !== ALL || filters.branch !== ALL || filters.program !== ALL || filters.subProgram !== ALL || Boolean(filters.query.trim());
+  const hasScopedFilter = Boolean(filters.province.length || filters.city.length || filters.branch.length || filters.program.length || filters.subProgram.length || filters.query.trim());
   const activeExportFilters = useMemo(() => [
-    { label: "Provinsi", value: filters.province },
-    { label: "Kota/Kab", value: filters.city },
-    { label: "Cabang", value: filters.branch },
-    { label: "Program", value: filters.program },
-    { label: "Sub Program", value: filters.subProgram },
+    { label: "Provinsi", value: filters.province.join(", ") },
+    { label: "Kota/Kab", value: filters.city.join(", ") },
+    { label: "Cabang", value: filters.branch.join(", ") },
+    { label: "Program", value: filters.program.join(", ") },
+    { label: "Sub Program", value: filters.subProgram.join(", ") },
     { label: "Pencarian", value: filters.query.trim() },
-  ].filter((item) => item.value && item.value !== ALL), [filters]);
-  const reset = () => setFilters({ startMonthIndex: 0, endMonthIndex: data?.latestMonthIndex ?? 6, province: ALL, city: ALL, branch: ALL, program: ALL, subProgram: ALL, query: "" });
+  ].filter((item) => item.value), [filters]);
+  const reset = () => setFilters({ startMonthIndex: 0, endMonthIndex: data?.latestMonthIndex ?? 6, province: [], city: [], branch: [], program: [], subProgram: [], query: "" });
   const exportData = useMemo(() => {
     if (reportMode === "branch") return {
       title: "Laporan Peserta Program per Cabang",
@@ -295,7 +292,7 @@ export function ParticipantOverview() {
 
     <div className={`sticky top-20 z-40 border border-slate-200/80 bg-white/95 shadow-soft backdrop-blur-xl transition-all ${isFilterExpanded ? "w-full rounded-[24px] p-5" : "ml-auto w-fit rounded-[18px] p-2"}`}><div className={`flex flex-wrap items-center gap-3 ${isFilterExpanded ? "mb-4 justify-between" : "justify-end"}`}>{isFilterExpanded && <span className="flex items-center gap-2 text-sm font-semibold"><Filter size={17} className="text-[#F2662F]" /> Filter laporan</span>}<div className="flex flex-wrap items-center gap-2">{isFilterExpanded && <button onClick={reset} className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600"><RotateCcw size={15} /> Reset filter</button>}<button type="button" aria-expanded={isFilterExpanded} onClick={() => setIsFilterExpanded((current) => !current)} className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-[#D94F1E] hover:bg-orange-100">{isFilterExpanded ? <EyeOff size={15} /> : <Eye size={15} />} {isFilterExpanded ? "Sembunyikan filter" : "Tampilkan filter"}</button></div></div>
       {isFilterExpanded && <>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><FilterSelect label="Provinsi" value={filters.province} values={provinces} onChange={(value) => setFilters((current) => ({ ...current, province: value, city: ALL, branch: ALL }))} /><FilterSelect label="Kota/Kab" value={filters.city} values={cities} onChange={(value) => setFilters((current) => ({ ...current, city: value, branch: ALL }))} /><FilterSelect label="Cabang" value={filters.branch} values={branches} onChange={(value) => setFilters((current) => ({ ...current, branch: value }))} /><FilterSelect label="Program" value={filters.program} values={programs} onChange={(value) => setFilters((current) => ({ ...current, program: value, subProgram: ALL }))} /><FilterSelect label="Sub Program" value={filters.subProgram} values={subPrograms} onChange={(value) => setFilters((current) => ({ ...current, subProgram: value }))} /><label className="relative"><Search size={16} className="absolute left-3 top-4 text-slate-400" /><input value={filters.query} onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))} placeholder="Cari data" className="h-12 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm" /></label></div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><MultiFilterSelect label="Provinsi" values={filters.province} options={provinces} onChange={(province) => setFilters((current) => ({ ...current, province, city: [] }))} /><MultiFilterSelect label="Kota/Kab" values={filters.city} options={cities} onChange={(city) => setFilters((current) => ({ ...current, city }))} /><MultiFilterSelect label="Cabang" values={filters.branch} options={branches} onChange={(branch) => setFilters((current) => ({ ...current, branch, province: [], city: [] }))} /><MultiFilterSelect label="Program" values={filters.program} options={programs} onChange={(program) => setFilters((current) => ({ ...current, program, subProgram: [] }))} /><MultiFilterSelect label="Sub Program" values={filters.subProgram} options={subPrograms} onChange={(subProgram) => setFilters((current) => ({ ...current, subProgram }))} /><label className="relative"><Search size={16} className="absolute left-3 top-4 text-slate-400" /><input value={filters.query} onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))} placeholder="Cari data" className="h-12 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm" /></label></div>
         <div className="mt-3 flex items-center justify-between text-xs text-slate-500"><span>{isLoading ? "Mengambil Google Sheets…" : `${formatNumber(rows.length)} baris sumber sesuai filter`}</span><button onClick={() => void loadData()} disabled={isLoading} className="flex items-center gap-1 text-[#F2662F]"><RefreshCw size={13} className={isLoading ? "animate-spin" : ""} /> Muat ulang</button></div>{loadError && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</p>}
       </>}
     </div>

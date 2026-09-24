@@ -3,15 +3,12 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Apple, Baby, BadgeCheck, BookOpen, CalendarDays, Camera, CircleDot, GraduationCap, Hammer, Heart, Landmark, Leaf, Library, MapPin, Newspaper, Phone, Recycle, RefreshCw, Search, Shield, SlidersHorizontal, Store, Users, X, type LucideIcon } from "lucide-react";
-import { ProvinceDistribution, VillageProfile, VillageStatus, VillageType } from "@/data/distribution";
+import { ProvinceDistribution, VillageProfile } from "@/data/distribution";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { MultiFilterSelect } from "@/components/MultiFilterSelect";
 
 const DistributionMap = dynamic(() => import("@/components/DistributionMap").then((module) => module.DistributionMap), { ssr: false });
 const EMPTY_PROVINCES: ProvinceDistribution[] = [];
-
-type StatusFilter = VillageStatus | "Semua";
-type VillageTypeFilter = VillageType | "Semua";
-type ProgramFilter = string | "Semua";
 
 type DistributionResponse = {
   provinces: ProvinceDistribution[];
@@ -44,9 +41,7 @@ function programIcon(program: string) {
   return PROGRAM_ICONS[program] ?? CircleDot;
 }
 
-function MapFilterSelect({ label, value, options, allLabel, onChange }: { label: string; value: string; options: string[]; allLabel: string; onChange: (value: string) => void }) {
-  return <label className="relative block"><span className="pointer-events-none absolute left-3 top-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 pb-1 pt-4 text-sm font-medium text-ink outline-none transition focus:border-[#D84315] focus:bg-white focus:ring-4 focus:ring-orange-100"><option value="Semua">{allLabel}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
-}
+const matchesSelection = (selected: string[], value: string) => selected.length === 0 || selected.includes(value);
 
 export default function PetaSebaranPage() {
   const cachedDistribution = getCachedJsonSnapshot<DistributionResponse>("distribution-sheet-production-v4");
@@ -56,14 +51,14 @@ export default function PetaSebaranPage() {
   const [selectedProvince, setSelectedProvince] = useState<ProvinceDistribution | null>(null);
   const [selectedVillage, setSelectedVillage] = useState<VillageProfile | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Semua");
-  const [villageTypeFilter, setVillageTypeFilter] = useState<VillageTypeFilter>("Semua");
-  const [programFilter, setProgramFilter] = useState<ProgramFilter>("Semua");
-  const [provinceFilter, setProvinceFilter] = useState("Semua");
-  const [regencyFilter, setRegencyFilter] = useState("Semua");
-  const [districtFilter, setDistrictFilter] = useState("Semua");
-  const [villageFilter, setVillageFilter] = useState("Semua");
-  const [branchFilter, setBranchFilter] = useState("Semua");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [villageTypeFilter, setVillageTypeFilter] = useState<string[]>([]);
+  const [programFilter, setProgramFilter] = useState<string[]>([]);
+  const [provinceFilter, setProvinceFilter] = useState<string[]>([]);
+  const [regencyFilter, setRegencyFilter] = useState<string[]>([]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [villageFilter, setVillageFilter] = useState<string[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
   const [selectedProgramQuery, setSelectedProgramQuery] = useState("");
 
@@ -108,47 +103,47 @@ export default function PetaSebaranPage() {
   }, [provinceDistributions]);
 
   const availableProvinces = useMemo(() => provinceDistributions
-    .filter((province) => branchFilter === "Semua" || province.villages.some((village) => village.branch === branchFilter))
+    .filter((province) => province.villages.some((village) => matchesSelection(branchFilter, village.branch)))
     .map((province) => province.name).sort((a, b) => a.localeCompare(b, "id")), [branchFilter, provinceDistributions]);
   const availableRegencies = useMemo(() => [...new Set(provinceDistributions
-    .filter((province) => provinceFilter === "Semua" || province.name === provinceFilter)
+    .filter((province) => matchesSelection(provinceFilter, province.name))
     .flatMap((province) => province.villages)
-    .filter((village) => branchFilter === "Semua" || village.branch === branchFilter)
+    .filter((village) => matchesSelection(branchFilter, village.branch))
     .map((village) => village.regency))]
     .filter(Boolean).sort((a, b) => a.localeCompare(b, "id")), [branchFilter, provinceDistributions, provinceFilter]);
   const availableDistricts = useMemo(() => [...new Set(provinceDistributions
-    .filter((province) => provinceFilter === "Semua" || province.name === provinceFilter)
+    .filter((province) => matchesSelection(provinceFilter, province.name))
     .flatMap((province) => province.villages)
-    .filter((village) => (branchFilter === "Semua" || village.branch === branchFilter) && (regencyFilter === "Semua" || village.regency === regencyFilter))
+    .filter((village) => matchesSelection(branchFilter, village.branch) && matchesSelection(regencyFilter, village.regency))
     .map((village) => village.district))]
     .filter(Boolean).sort((a, b) => a.localeCompare(b, "id")), [branchFilter, provinceDistributions, provinceFilter, regencyFilter]);
   const availableVillages = useMemo(() => [...new Set(provinceDistributions
-    .filter((province) => provinceFilter === "Semua" || province.name === provinceFilter)
+    .filter((province) => matchesSelection(provinceFilter, province.name))
     .flatMap((province) => province.villages)
-    .filter((village) => (branchFilter === "Semua" || village.branch === branchFilter) && (regencyFilter === "Semua" || village.regency === regencyFilter) && (districtFilter === "Semua" || village.district === districtFilter))
+    .filter((village) => matchesSelection(branchFilter, village.branch) && matchesSelection(regencyFilter, village.regency) && matchesSelection(districtFilter, village.district))
     .map((village) => village.name))]
     .filter(Boolean).sort((a, b) => a.localeCompare(b, "id")), [branchFilter, districtFilter, provinceDistributions, provinceFilter, regencyFilter]);
   const availableBranches = useMemo(() => [...new Set(provinceDistributions
-    .filter((province) => provinceFilter === "Semua" || province.name === provinceFilter)
+    .filter((province) => matchesSelection(provinceFilter, province.name))
     .flatMap((province) => province.villages)
-    .filter((village) => (regencyFilter === "Semua" || village.regency === regencyFilter) && (districtFilter === "Semua" || village.district === districtFilter) && (villageFilter === "Semua" || village.name === villageFilter))
+    .filter((village) => matchesSelection(regencyFilter, village.regency) && matchesSelection(districtFilter, village.district) && matchesSelection(villageFilter, village.name))
     .map((village) => village.branch))]
     .filter((branch) => branch && branch !== "-").sort((a, b) => a.localeCompare(b, "id")), [districtFilter, provinceDistributions, provinceFilter, regencyFilter, villageFilter]);
 
-  const hasActiveMapFilters = statusFilter !== "Semua" || villageTypeFilter !== "Semua" || programFilter !== "Semua" || provinceFilter !== "Semua" || regencyFilter !== "Semua" || districtFilter !== "Semua" || villageFilter !== "Semua" || branchFilter !== "Semua";
+  const hasActiveMapFilters = Boolean(statusFilter.length || villageTypeFilter.length || programFilter.length || provinceFilter.length || regencyFilter.length || districtFilter.length || villageFilter.length || branchFilter.length);
 
   const filteredProvinceDistributions = useMemo(() => {
     return provinceDistributions
       .map((province) => {
         const villages = province.villages.filter((village) => {
-          const matchesProvince = provinceFilter === "Semua" || province.name === provinceFilter;
-          const matchesRegency = regencyFilter === "Semua" || village.regency === regencyFilter;
-          const matchesDistrict = districtFilter === "Semua" || village.district === districtFilter;
-          const matchesVillage = villageFilter === "Semua" || village.name === villageFilter;
-          const matchesBranch = branchFilter === "Semua" || village.branch === branchFilter;
-          const matchesStatus = statusFilter === "Semua" || village.status === statusFilter;
-          const matchesType = villageTypeFilter === "Semua" || village.villageType === villageTypeFilter;
-          const matchesProgram = programFilter === "Semua" || village.programs.includes(programFilter);
+          const matchesProvince = matchesSelection(provinceFilter, province.name);
+          const matchesRegency = matchesSelection(regencyFilter, village.regency);
+          const matchesDistrict = matchesSelection(districtFilter, village.district);
+          const matchesVillage = matchesSelection(villageFilter, village.name);
+          const matchesBranch = matchesSelection(branchFilter, village.branch);
+          const matchesStatus = matchesSelection(statusFilter, village.status);
+          const matchesType = matchesSelection(villageTypeFilter, village.villageType);
+          const matchesProgram = programFilter.length === 0 || programFilter.some((program) => village.programs.includes(program));
 
           return matchesProvince && matchesRegency && matchesDistrict && matchesVillage && matchesBranch && matchesStatus && matchesType && matchesProgram;
         });
@@ -251,14 +246,14 @@ export default function PetaSebaranPage() {
   }, [query, selectedProvince]);
 
   const resetMapFilters = () => {
-    setStatusFilter("Semua");
-    setVillageTypeFilter("Semua");
-    setProgramFilter("Semua");
-    setProvinceFilter("Semua");
-    setRegencyFilter("Semua");
-    setDistrictFilter("Semua");
-    setVillageFilter("Semua");
-    setBranchFilter("Semua");
+    setStatusFilter([]);
+    setVillageTypeFilter([]);
+    setProgramFilter([]);
+    setProvinceFilter([]);
+    setRegencyFilter([]);
+    setDistrictFilter([]);
+    setVillageFilter([]);
+    setBranchFilter([]);
   };
 
   return (
@@ -366,39 +361,14 @@ export default function PetaSebaranPage() {
 
           <div className="mt-5 overflow-x-auto pb-1">
             <div className="grid min-w-[1480px] grid-cols-[repeat(8,minmax(145px,1fr))_auto] gap-3">
-              <MapFilterSelect label="Provinsi" value={provinceFilter} options={availableProvinces} allLabel="Semua provinsi" onChange={(value) => { setProvinceFilter(value); setRegencyFilter("Semua"); setDistrictFilter("Semua"); setVillageFilter("Semua"); setBranchFilter("Semua"); }} />
-              <MapFilterSelect label="Kota/Kab" value={regencyFilter} options={availableRegencies} allLabel="Semua kota/kab" onChange={(value) => { setRegencyFilter(value); setDistrictFilter("Semua"); setVillageFilter("Semua"); setBranchFilter("Semua"); }} />
-              <MapFilterSelect label="Kecamatan" value={districtFilter} options={availableDistricts} allLabel="Semua kecamatan" onChange={(value) => { setDistrictFilter(value); setVillageFilter("Semua"); setBranchFilter("Semua"); }} />
-              <MapFilterSelect label="Desa" value={villageFilter} options={availableVillages} allLabel="Semua desa" onChange={(value) => { setVillageFilter(value); setBranchFilter("Semua"); }} />
-              <MapFilterSelect label="Cabang" value={branchFilter} options={availableBranches} allLabel="Semua cabang" onChange={setBranchFilter} />
-              <label className="relative block">
-                <span className="pointer-events-none absolute left-3 top-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Ket. Desber</span>
-                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 pb-1 pt-4 text-sm font-medium text-ink outline-none transition focus:border-[#D84315] focus:bg-white focus:ring-4 focus:ring-orange-100">
-                  <option value="Semua">Semua kondisi</option>
-                  <option value="Aktif">Aktif</option>
-                  <option value="Hibernasi">Hibernasi</option>
-                  <option value="Graduasi">Graduasi</option>
-                  <option value="Tidak diketahui">Tidak diketahui</option>
-                </select>
-              </label>
-              <label className="relative block">
-                <span className="pointer-events-none absolute left-3 top-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Status Desber</span>
-                <select value={villageTypeFilter} onChange={(event) => setVillageTypeFilter(event.target.value as VillageTypeFilter)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 pb-1 pt-4 text-sm font-medium text-ink outline-none transition focus:border-[#D84315] focus:bg-white focus:ring-4 focus:ring-orange-100">
-                  <option value="Semua">Semua status</option>
-                  <option value="Desber">Desber</option>
-                  <option value="Desbin">Desbin</option>
-                  <option value="Sister Village">Sister Village</option>
-                  <option value="Desa Kolaborasi">Desa Kolaborasi</option>
-                  <option value="Tidak diketahui">Tidak diketahui</option>
-                </select>
-              </label>
-              <label className="relative block">
-                <span className="pointer-events-none absolute left-3 top-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Program</span>
-                <select value={programFilter} onChange={(event) => setProgramFilter(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 pb-1 pt-4 text-sm font-medium text-ink outline-none transition focus:border-[#D84315] focus:bg-white focus:ring-4 focus:ring-orange-100">
-                  <option value="Semua">Semua program</option>
-                  {availablePrograms.map((program) => <option key={program} value={program}>{program}</option>)}
-                </select>
-              </label>
+              <MultiFilterSelect label="Provinsi" values={provinceFilter} options={availableProvinces} onChange={(values) => { setProvinceFilter(values); setRegencyFilter([]); setDistrictFilter([]); setVillageFilter([]); }} />
+              <MultiFilterSelect label="Kota/Kab" values={regencyFilter} options={availableRegencies} onChange={(values) => { setRegencyFilter(values); setDistrictFilter([]); setVillageFilter([]); }} />
+              <MultiFilterSelect label="Kecamatan" values={districtFilter} options={availableDistricts} onChange={(values) => { setDistrictFilter(values); setVillageFilter([]); }} />
+              <MultiFilterSelect label="Desa" values={villageFilter} options={availableVillages} onChange={setVillageFilter} />
+              <MultiFilterSelect label="Cabang" values={branchFilter} options={availableBranches} onChange={(values) => { setBranchFilter(values); setProvinceFilter([]); setRegencyFilter([]); setDistrictFilter([]); setVillageFilter([]); }} />
+              <MultiFilterSelect label="Ket. Desber" values={statusFilter} options={["Aktif", "Hibernasi", "Graduasi", "Tidak diketahui"]} allLabel="Semua kondisi" onChange={setStatusFilter} />
+              <MultiFilterSelect label="Status Desber" values={villageTypeFilter} options={["Desber", "Desbin", "Sister Village", "Desa Kolaborasi", "Tidak diketahui"]} allLabel="Semua status" onChange={setVillageTypeFilter} />
+              <MultiFilterSelect label="Program" values={programFilter} options={availablePrograms} onChange={setProgramFilter} />
               <button onClick={resetMapFilters} disabled={!hasActiveMapFilters} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#D84315] disabled:cursor-not-allowed disabled:opacity-40">
                 <SlidersHorizontal size={16} /> Reset
               </button>

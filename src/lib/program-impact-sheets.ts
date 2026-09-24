@@ -16,6 +16,13 @@ export type ProgramImpactLocationDetail = {
   program?: string;
 };
 
+export type ProgramImpactParticipantDetail = {
+  id: string;
+  name: string;
+  outcome: string;
+  year?: string;
+};
+
 export type ProgramImpactIndicator = {
   id: "terserap-kerja" | "wirausaha" | "hafiz" | "bank-sampah" | "mangrove" | "masjid" | "pp-terbina";
   achievement: number;
@@ -23,6 +30,7 @@ export type ProgramImpactIndicator = {
   sourceUrl: string;
   dataThrough: string;
   details?: ProgramImpactLocationDetail[];
+  participantDetails?: ProgramImpactParticipantDetail[];
 };
 
 export type ProgramImpactData = {
@@ -80,11 +88,18 @@ async function loadVocationImpact() {
   const rows = table.slice(1).filter((row) => row.some(Boolean));
   const validRows = rows.filter((row) => row[nameColumn]?.trim() && ["terserap kerja", "membuka usaha"].includes(normalized(row[outcomeColumn] ?? "")));
   const years = validRows.map((row) => Number(row[yearColumn] ?? 0)).filter((value) => Number.isInteger(value) && value > 2000);
+  const details: ProgramImpactParticipantDetail[] = validRows.map((row, index) => ({
+    id: `vokasi-${index + 1}`,
+    name: row[nameColumn].trim(),
+    outcome: normalized(row[outcomeColumn] ?? "") === "terserap kerja" ? "Terserap kerja" : "Membuka usaha",
+    year: yearColumn >= 0 ? row[yearColumn]?.trim() || undefined : undefined,
+  }));
   return {
     employed: validRows.filter((row) => normalized(row[outcomeColumn] ?? "") === "terserap kerja").length,
     entrepreneurs: validRows.filter((row) => normalized(row[outcomeColumn] ?? "") === "membuka usaha").length,
     year: years.length ? Math.max(...years) : new Date().getFullYear(),
     rowsRead: rows.length, rowsAccepted: validRows.length, rowsRejected: rows.length - validRows.length,
+    details,
     source,
   };
 }
@@ -98,7 +113,8 @@ async function loadHafidzImpact() {
   if (nameColumn < 0 || hafidzColumn < 0) throw new Error("Kolom Nama PP atau Hafidz tidak ditemukan.");
   const rows = table.slice(1).filter((row) => row.some(Boolean));
   const validRows = rows.filter((row) => row[nameColumn]?.trim() && /\b30\s*juz\b/i.test(row[hafidzColumn] ?? ""));
-  return { total: validRows.length, rowsRead: rows.length, rowsAccepted: validRows.length, rowsRejected: rows.length - validRows.length, source };
+  const details: ProgramImpactParticipantDetail[] = validRows.map((row, index) => ({ id: `hafidz-${index + 1}`, name: row[nameColumn].trim(), outcome: "Hafidz 30 juz" }));
+  return { total: validRows.length, details, rowsRead: rows.length, rowsAccepted: validRows.length, rowsRejected: rows.length - validRows.length, source };
 }
 
 async function loadEnvironmentImpact() {
@@ -180,8 +196,8 @@ async function loadMasjidBerdayaImpact() {
 
 export async function getProgramImpactData(forceRefresh = false): Promise<ProgramImpactData> {
   const [vocation, hafidz, environment, masjidBerdaya, ppTerbina] = await Promise.all([
-    getServerCachedData("impact-vocation-v1", loadVocationImpact, forceRefresh),
-    getServerCachedData("impact-hafidz-v1", loadHafidzImpact, forceRefresh),
+    getServerCachedData("impact-vocation-v2", loadVocationImpact, forceRefresh),
+    getServerCachedData("impact-hafidz-v2", loadHafidzImpact, forceRefresh),
     getServerCachedData("impact-environment-v1", loadEnvironmentImpact, forceRefresh),
     getServerCachedData("impact-masjid-berdaya-v1", loadMasjidBerdayaImpact, forceRefresh),
     queryDetailData({ source: "details", metricId: "pp-terbina" }, forceRefresh),
@@ -190,9 +206,9 @@ export async function getProgramImpactData(forceRefresh = false): Promise<Progra
   return {
     year: vocation.year,
     indicators: [
-      { id: "terserap-kerja", achievement: vocation.employed, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year) },
-      { id: "wirausaha", achievement: vocation.entrepreneurs, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year) },
-      { id: "hafiz", achievement: hafidz.total, sourceLabel: hafidz.source.label, sourceUrl: hafidz.source.sheetUrl, dataThrough: String(vocation.year) },
+      { id: "terserap-kerja", achievement: vocation.employed, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year), participantDetails: vocation.details.filter((detail) => detail.outcome === "Terserap kerja") },
+      { id: "wirausaha", achievement: vocation.entrepreneurs, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year), participantDetails: vocation.details.filter((detail) => detail.outcome === "Membuka usaha") },
+      { id: "hafiz", achievement: hafidz.total, sourceLabel: hafidz.source.label, sourceUrl: hafidz.source.sheetUrl, dataThrough: "", participantDetails: hafidz.details },
       { id: "bank-sampah", achievement: environment.bankSampah.length, sourceLabel: environment.source.label, sourceUrl: environment.source.sheetUrl, dataThrough: environment.dataThrough, details: environment.bankSampah },
       { id: "mangrove", achievement: environment.mangrove.length, sourceLabel: environment.source.label, sourceUrl: environment.source.sheetUrl, dataThrough: environment.dataThrough, details: environment.mangrove },
       { id: "masjid", achievement: masjidBerdaya.total, sourceLabel: masjidBerdaya.source.label, sourceUrl: masjidBerdaya.source.sheetUrl, dataThrough: masjidBerdaya.dataThrough, details: masjidBerdaya.details },

@@ -8,7 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { formatNumber } from "@/data/dashboard";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import type { DashboardSheetData, DashboardSheetMetric } from "@/lib/dashboard-sheets";
-import type { ProgramImpactData, ProgramImpactLocationDetail } from "@/lib/program-impact-sheets";
+import type { ProgramImpactData, ProgramImpactLocationDetail, ProgramImpactParticipantDetail } from "@/lib/program-impact-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
 
 type ProgramId = "ekonomi" | "pendidikan" | "kesehatan" | "lingkungan" | "dakwah";
@@ -51,7 +51,7 @@ function latestDataMonth(metric: DashboardSheetMetric) { return metric.monthly.r
 export default function DampakProgramPage() {
   const [activeProgramId, setActiveProgramId] = useState<ProgramId>("ekonomi");
   const cachedDashboard = getCachedJsonSnapshot<DashboardSheetData>("dashboard-sheet-production-v2");
-  const cachedProgramImpact = getCachedJsonSnapshot<ProgramImpactData>("program-impact-production-v3");
+  const cachedProgramImpact = getCachedJsonSnapshot<ProgramImpactData>("program-impact-production-v4");
   const [sheetData, setSheetData] = useState<DashboardSheetData | null>(cachedDashboard);
   const [programImpact, setProgramImpact] = useState<ProgramImpactData | null>(cachedProgramImpact);
   const [isLoading, setIsLoading] = useState(!cachedDashboard || !cachedProgramImpact);
@@ -64,7 +64,7 @@ export default function DampakProgramPage() {
     try {
       const [dashboard, impact] = await Promise.all([
         fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", forceRefresh),
-        fetchCachedJson<ProgramImpactData>("program-impact-production-v3", "/api/program-impact", forceRefresh),
+        fetchCachedJson<ProgramImpactData>("program-impact-production-v4", "/api/program-impact", forceRefresh),
       ]);
       setSheetData(dashboard); setProgramImpact(impact);
     }
@@ -75,7 +75,7 @@ export default function DampakProgramPage() {
     let cancelled = false;
     Promise.all([
       fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard"),
-      fetchCachedJson<ProgramImpactData>("program-impact-production-v3", "/api/program-impact"),
+      fetchCachedJson<ProgramImpactData>("program-impact-production-v4", "/api/program-impact"),
     ])
       .then(([dashboard, impact]) => { if (!cancelled) { setSheetData(dashboard); setProgramImpact(impact); } })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Data dampak belum dapat dimuat."); })
@@ -95,7 +95,7 @@ export default function DampakProgramPage() {
     const target = metric?.target || indicator.target;
     const percentage = target && achievement !== null ? Math.round((achievement / target) * 100) : null;
     const monthIndex = metric ? latestDataMonth(metric) : -1;
-    return { ...indicator, target, achievement, percentage, monthIndex, dataThrough: linkedImpact?.dataThrough, sourceLabel: linkedImpact?.sourceLabel, sourceUrl: linkedImpact?.sourceUrl, details: linkedImpact?.details };
+    return { ...indicator, target, achievement, percentage, monthIndex, dataThrough: linkedImpact?.dataThrough, sourceLabel: linkedImpact?.sourceLabel, sourceUrl: linkedImpact?.sourceUrl, details: linkedImpact?.details, participantDetails: linkedImpact?.participantDetails };
   }), [activeProgram, impactMap, metricMap, sheetData]);
   const economicIndicators = activeProgramId === "ekonomi" ? activeIndicators.filter((indicator) => indicator.achievement !== null) : [];
   const chartData = economicIndicators.map((indicator) => ({ name: indicator.id === "gk" ? "Keluar GK" : indicator.id === "muzzaki" ? "Muzaki" : "Munfik", target: indicator.target ?? 0, capaian: indicator.achievement ?? 0 }));
@@ -141,8 +141,8 @@ export default function DampakProgramPage() {
           </div>
         </div> : connectedIndicators.length > 0 ? <div className="space-y-7">
           <div className={`grid gap-4 sm:grid-cols-2 ${activeProgramId === "dakwah" ? "xl:grid-cols-2" : activeProgramId === "lingkungan" ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>{activeIndicators.map((indicator) => indicator.achievement !== null
-            ? <ImpactMetricCard key={indicator.id} indicator={indicator} months={months} color={activeProgram.color} isLoading={isLoading} onOpenDetails={indicator.details?.length ? () => { setDetailIndicator(indicator); setDetailQuery(""); } : undefined} />
-            : <PendingIndicatorCard key={indicator.id} indicator={indicator} color={activeProgram.color} softColor={activeProgram.softColor} />)}</div>
+            ? <ImpactMetricCard key={indicator.id} indicator={indicator} months={months} color={activeProgram.color} isLoading={isLoading} onOpenDetails={indicator.details?.length || indicator.participantDetails?.length ? () => { setDetailIndicator(indicator); setDetailQuery(""); } : undefined} />
+            : <PendingIndicatorCard key={indicator.id} indicator={indicator} color={activeProgram.color} softColor={activeProgram.softColor} onOpenDetails={activeProgramId === "pendidikan" ? () => { setDetailIndicator(indicator); setDetailQuery(""); } : undefined} />)}</div>
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             {activeProgramId === "dakwah" ? <DakwahProgressPanel indicators={connectedIndicators} isLoading={isLoading} /> : <EconomicImpactChart data={connectedChartData} isLoading={isLoading} color={activeProgram.color} title={`Target dan capaian dampak ${activeProgram.name.replace("Program ", "").toLowerCase()}`} />}
             {activeProgramId === "dakwah" ? <div className="flex flex-col rounded-[24px] bg-gradient-to-br from-[#173B2A] to-[#245C3E] p-6 text-white shadow-lg shadow-emerald-900/10">
@@ -168,23 +168,26 @@ export default function DampakProgramPage() {
     </div>
 
     {detailIndicator?.details?.length ? <ImpactDetailDrawer indicator={detailIndicator} query={detailQuery} onQueryChange={setDetailQuery} onClose={() => setDetailIndicator(null)} /> : null}
+    {detailIndicator && (detailIndicator.participantDetails || detailIndicator.id === "vokasi-keahlian") ? <EducationDetailDrawer indicator={detailIndicator} query={detailQuery} onQueryChange={setDetailQuery} onClose={() => setDetailIndicator(null)} /> : null}
   </section>;
 }
 
-type ResolvedIndicator = ImpactIndicator & { achievement: number | null; percentage: number | null; monthIndex: number; dataThrough?: string; sourceLabel?: string; sourceUrl?: string; details?: ProgramImpactLocationDetail[] };
+type ResolvedIndicator = ImpactIndicator & { achievement: number | null; percentage: number | null; monthIndex: number; dataThrough?: string; sourceLabel?: string; sourceUrl?: string; details?: ProgramImpactLocationDetail[]; participantDetails?: ProgramImpactParticipantDetail[] };
 
 function ImpactMetricCard({ indicator, months, color, isLoading, onOpenDetails }: { indicator: ResolvedIndicator; months: readonly string[]; color: string; isLoading: boolean; onOpenDetails?: () => void }) {
   const tone = achievementTone(indicator.percentage ?? 0);
   const sourceNote = indicator.sourceLabel && <p className="mt-auto flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[10px] text-slate-400"><Database size={11} /> {indicator.sourceLabel}</p>;
-  const content = <div className="flex h-full flex-col"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Indikator dampak</p><h3 className="mt-1.5 text-sm font-bold leading-5 text-ink">{indicator.label}</h3></div>{(indicator.href || onOpenDetails) && <ArrowUpRight size={17} className="shrink-0 text-slate-400" />}</div><div className="mt-4 grid grid-cols-2 gap-2.5"><div className="rounded-xl bg-slate-50 px-3 py-2.5"><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Target</p><p className="mt-1 text-xl font-bold text-ink">{indicator.target ? formatNumber(indicator.target) : "—"}</p><p className="text-[10px] text-slate-400">{indicator.unit}</p></div><div className="rounded-xl border border-orange-200 bg-orange-50/70 px-3 py-2.5"><p className="text-[9px] font-semibold uppercase tracking-wider text-[#D84315]">Capaian</p><p className="mt-1 text-xl font-bold" style={{ color }}>{isLoading ? "—" : indicator.achievement === null ? "—" : formatNumber(indicator.achievement)}</p><p className="truncate text-[10px] text-slate-400">{indicator.monthIndex >= 0 ? `*per ${months[indicator.monthIndex]}` : indicator.dataThrough ? `*per ${indicator.dataThrough}` : indicator.unit}</p></div></div><div className="mt-3 h-2 overflow-hidden rounded-full" style={{ backgroundColor: tone.trackColor }}><div className="h-full rounded-full" style={{ width: `${Math.min(indicator.percentage ?? 0, 100)}%`, backgroundColor: tone.color }} /></div><div className="mb-3 mt-1.5 flex items-center justify-between gap-3"><p className="text-[10px] text-slate-400">{onOpenDetails ? `${formatNumber(indicator.details?.length ?? 0)} lokasi dapat dilihat` : "Realisasi terhadap target"}</p><p className="text-[11px] font-semibold" style={{ color: tone.color }}>{indicator.percentage === null ? "Menunggu data" : `${indicator.percentage}% · ${tone.label}`}</p></div>{indicator.sourceUrl && !indicator.href && !onOpenDetails ? <a href={indicator.sourceUrl} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[10px] text-slate-400 transition hover:text-slate-600"><ExternalLink size={11} /> {indicator.sourceLabel}</a> : sourceNote}</div>;
+  const content = <div className="flex h-full flex-col"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Indikator dampak</p><h3 className="mt-1.5 text-sm font-bold leading-5 text-ink">{indicator.label}</h3></div>{(indicator.href || onOpenDetails) && <ArrowUpRight size={17} className="shrink-0 text-slate-400" />}</div><div className="mt-4 grid grid-cols-2 gap-2.5"><div className="rounded-xl bg-slate-50 px-3 py-2.5"><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Target</p><p className="mt-1 text-xl font-bold text-ink">{indicator.target ? formatNumber(indicator.target) : "—"}</p><p className="text-[10px] text-slate-400">{indicator.unit}</p></div><div className="rounded-xl border border-orange-200 bg-orange-50/70 px-3 py-2.5"><p className="text-[9px] font-semibold uppercase tracking-wider text-[#D84315]">Capaian</p><p className="mt-1 text-xl font-bold" style={{ color }}>{isLoading ? "—" : indicator.achievement === null ? "—" : formatNumber(indicator.achievement)}</p><p className="truncate text-[10px] text-slate-400">{indicator.monthIndex >= 0 ? `*per ${months[indicator.monthIndex]}` : indicator.dataThrough ? `*per ${indicator.dataThrough}` : indicator.unit}</p></div></div><div className="mt-3 h-2 overflow-hidden rounded-full" style={{ backgroundColor: tone.trackColor }}><div className="h-full rounded-full" style={{ width: `${Math.min(indicator.percentage ?? 0, 100)}%`, backgroundColor: tone.color }} /></div><div className="mb-3 mt-1.5 flex items-center justify-between gap-3"><p className="text-[10px] text-slate-400">{onOpenDetails ? `${formatNumber(indicator.participantDetails?.length ?? indicator.details?.length ?? 0)} ${indicator.participantDetails ? "peserta" : "lokasi"} dapat dilihat` : "Realisasi terhadap target"}</p><p className="text-[11px] font-semibold" style={{ color: tone.color }}>{indicator.percentage === null ? "Menunggu data" : `${indicator.percentage}% · ${tone.label}`}</p></div>{indicator.sourceUrl && !indicator.href && !onOpenDetails ? <a href={indicator.sourceUrl} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[10px] text-slate-400 transition hover:text-slate-600"><ExternalLink size={11} /> {indicator.sourceLabel}</a> : sourceNote}</div>;
   const cardClass = "rounded-[22px] border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-lg";
   if (indicator.href) return <Link href={indicator.href} className={cardClass}>{content}</Link>;
   if (onOpenDetails) return <button type="button" onClick={onOpenDetails} className={`w-full ${cardClass}`}>{content}</button>;
   return <div className="rounded-[22px] border border-slate-200 bg-white p-4">{content}</div>;
 }
 
-function PendingIndicatorCard({ indicator, color, softColor }: { indicator: ResolvedIndicator; color: string; softColor: string }) {
-  return <div className="rounded-[22px] border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target {indicator.unit}</p><h3 className="mt-2 text-sm font-bold leading-5 text-ink">{indicator.label}</h3></div><span className="rounded-xl p-2" style={{ backgroundColor: softColor, color }}><Target size={16} /></span></div><div className="mt-5 flex items-end justify-between gap-3"><div><p className="text-2xl font-bold text-ink">{indicator.target === null ? "Belum ditetapkan" : formatNumber(indicator.target)}</p><p className="text-xs text-slate-400">{indicator.target === null ? "Target belum tersedia" : indicator.unit}</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Capaian belum tersedia</span></div><div className="mt-4 h-2 rounded-full border border-dashed border-slate-300 bg-slate-50" /></div>;
+function PendingIndicatorCard({ indicator, color, softColor, onOpenDetails }: { indicator: ResolvedIndicator; color: string; softColor: string; onOpenDetails?: () => void }) {
+  const content = <><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target {indicator.unit}</p><h3 className="mt-2 text-sm font-bold leading-5 text-ink">{indicator.label}</h3></div><span className="rounded-xl p-2" style={{ backgroundColor: softColor, color }}>{onOpenDetails ? <ArrowUpRight size={16} /> : <Target size={16} />}</span></div><div className="mt-5 flex items-end justify-between gap-3"><div><p className="text-2xl font-bold text-ink">{indicator.target === null ? "Belum ditetapkan" : formatNumber(indicator.target)}</p><p className="text-xs text-slate-400">{indicator.target === null ? "Target belum tersedia" : indicator.unit}</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Capaian belum tersedia</span></div><div className="mt-4 h-2 rounded-full border border-dashed border-slate-300 bg-slate-50" />{onOpenDetails && <p className="mt-2 text-xs font-semibold" style={{ color }}>Lihat status rincian</p>}</>;
+  const className = "rounded-[22px] border border-slate-200 bg-white p-5 text-left";
+  return onOpenDetails ? <button type="button" onClick={onOpenDetails} className={`w-full ${className} transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-lg`}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 function DakwahCoverageStat({ value, label }: { value: number; label: string }) {
@@ -193,6 +196,25 @@ function DakwahCoverageStat({ value, label }: { value: number; label: string }) 
 
 function DakwahProgressPanel({ indicators, isLoading }: { indicators: ResolvedIndicator[]; isLoading: boolean }) {
   return <div className="rounded-[24px] border border-slate-200 bg-white p-6"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Kemajuan indikator</p><h3 className="mt-2 text-xl font-bold text-ink">Progres terhadap target dampak</h3><p className="mt-1 text-xs leading-5 text-slate-500">Setiap indikator menggunakan skala persentase agar capaian dengan satuan berbeda tetap mudah dibandingkan.</p><div className="mt-6 space-y-4">{indicators.map((indicator) => { const tone = achievementTone(indicator.percentage ?? 0); const Icon = indicator.id === "masjid" ? Landmark : UserRound; return <div key={indicator.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4"><div className="flex items-start justify-between gap-4"><div className="flex items-start gap-3"><span className="rounded-xl bg-white p-2.5 text-emerald-600 shadow-sm"><Icon size={18} /></span><div><p className="text-sm font-bold text-ink">{indicator.label}</p><p className="mt-1 text-xs text-slate-500">{isLoading ? "Memuat capaian" : `${formatNumber(indicator.achievement ?? 0)} dari ${formatNumber(indicator.target ?? 0)} ${indicator.unit}`}</p></div></div><p className="text-xl font-bold" style={{ color: tone.color }}>{isLoading || indicator.percentage === null ? "—" : `${indicator.percentage}%`}</p></div><div className="mt-3 h-2.5 overflow-hidden rounded-full" style={{ backgroundColor: tone.trackColor }}><div className="h-full rounded-full transition-all" style={{ width: `${Math.min(indicator.percentage ?? 0, 100)}%`, backgroundColor: tone.color }} /></div><p className="mt-2 text-right text-[10px] font-semibold" style={{ color: tone.color }}>{indicator.percentage === null ? "Menunggu data" : tone.label}</p></div>; })}</div></div>;
+}
+
+function EducationDetailDrawer({ indicator, query, onQueryChange, onClose }: { indicator: ResolvedIndicator; query: string; onQueryChange: (value: string) => void; onClose: () => void }) {
+  const participants = indicator.participantDetails ?? [];
+  const normalizedQuery = query.trim().toLocaleLowerCase("id-ID");
+  const filtered = participants.filter((participant) => !normalizedQuery || [participant.name, participant.outcome, participant.year ?? ""].some((value) => value.toLocaleLowerCase("id-ID").includes(normalizedQuery)));
+
+  return <>
+    <button type="button" aria-label={`Tutup rincian ${indicator.label}`} onClick={onClose} className="fixed inset-0 z-[1000] bg-slate-950/35 backdrop-blur-[2px]" />
+    <aside role="dialog" aria-modal="true" aria-label={`Rincian ${indicator.label}`} className="fixed inset-y-0 right-0 z-[1001] flex w-full max-w-[640px] flex-col bg-[#F8FAFC] shadow-2xl">
+      <div className="bg-gradient-to-br from-[#8A6100] to-[#B7890D] px-6 py-6 text-white">
+        <div className="flex items-start justify-between gap-4"><div className="flex items-start gap-3"><span className="rounded-2xl bg-white/15 p-3"><GraduationCap size={22} /></span><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-yellow-100">Rincian dampak pendidikan</p><h2 className="mt-1 text-2xl font-bold">{indicator.label}</h2><p className="mt-1 text-sm text-white/80">{indicator.achievement === null ? "Sumber capaian per peserta belum tersedia" : `${formatNumber(participants.length)} peserta tercatat sesuai definisi indikator`}</p></div></div><button type="button" onClick={onClose} aria-label="Tutup rincian pendidikan" className="rounded-xl bg-white/10 p-2 transition hover:bg-white/20"><X size={20} /></button></div>
+        <div className="mt-5 grid grid-cols-2 gap-2"><DrawerSummary value={indicator.target ?? 0} label="Target" /><div className="rounded-xl bg-white/10 px-3 py-2.5"><p className="text-lg font-bold">{indicator.achievement === null ? "—" : formatNumber(indicator.achievement)}</p><p className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Capaian</p></div></div>
+      </div>
+      {participants.length > 0 && <div className="border-b border-slate-200 bg-white px-6 py-4"><label className="relative block"><span className="sr-only">Cari peserta pendidikan</span><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Cari nama, hasil, atau tahun" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100" /></label><p className="mt-2 text-xs text-slate-400">Menampilkan {formatNumber(filtered.length)} dari {formatNumber(participants.length)} peserta</p></div>}
+      <div className="flex-1 overflow-y-auto p-5"><div className="space-y-2">{filtered.map((participant, index) => <div key={participant.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Peserta {String(index + 1).padStart(2, "0")}</p><h3 className="mt-1 font-bold text-ink">{participant.name}</h3><p className="mt-1 text-xs text-slate-500">{participant.outcome}</p></div>{participant.year && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{participant.year}</span>}</div>)}{filtered.length === 0 && <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center text-sm text-slate-500">{indicator.achievement === null ? "Target indikator sudah tersedia, tetapi sumber capaian peserta dengan keahlian belum terhubung. Tidak ada angka atau daftar peserta yang ditampilkan sampai sumbernya dapat diverifikasi." : "Peserta tidak ditemukan untuk pencarian ini."}</p>}</div></div>
+      {indicator.sourceUrl && <div className="border-t border-slate-200 bg-white px-6 py-4"><a href={indicator.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-semibold text-amber-800 hover:text-amber-950"><ExternalLink size={14} /> Sumber: {indicator.sourceLabel}</a></div>}
+    </aside>
+  </>;
 }
 
 function ImpactDetailDrawer({ indicator, query, onQueryChange, onClose }: { indicator: ResolvedIndicator; query: string; onQueryChange: (value: string) => void; onClose: () => void }) {
