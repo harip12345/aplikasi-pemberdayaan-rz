@@ -110,7 +110,7 @@ function slugify(value: string) {
 }
 
 function statusFromRow(row: CsvRecord): VillageStatus {
-  const status = row["Ket Desber"]?.toLowerCase();
+  const status = row["Ket Desber"]?.trim().toLowerCase();
   if (status === "aktif") return "Aktif";
   if (status === "hibernasi") return "Hibernasi";
   if (status === "graduasi") return "Graduasi";
@@ -118,7 +118,7 @@ function statusFromRow(row: CsvRecord): VillageStatus {
 }
 
 function villageTypeFromRow(row: CsvRecord): VillageType {
-  const type = row["Status Desber"]?.toLowerCase();
+  const type = row["Status Desber"]?.trim().toLowerCase();
   if (type === "desber") return "Desber";
   if (type === "desbin") return "Desbin";
   if (type === "sister village") return "Sister Village";

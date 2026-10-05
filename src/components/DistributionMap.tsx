@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { ProvinceDistribution } from "@/data/distribution";
 
 const INDONESIA_CENTER: [number, number] = [-2.3, 118];
+const CARTO_KEY = process.env.NEXT_PUBLIC_CARTO_BASEMAP_KEY?.trim();
+const CARTO_URL = CARTO_KEY
+  ? `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_KEY)}`
+  : null;
+const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function provinceIcon(province: ProvinceDistribution) {
   return L.divIcon({
@@ -51,8 +56,57 @@ function MapViewportController({ provinces, focusResults }: Pick<DistributionMap
   return null;
 }
 
+function MapSizeController() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    let frame = 0;
+    const updateSize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    };
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(container);
+    window.addEventListener("resize", updateSize);
+    document.addEventListener("visibilitychange", updateSize);
+    updateSize();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateSize);
+      document.removeEventListener("visibilitychange", updateSize);
+      cancelAnimationFrame(frame);
+    };
+  }, [map]);
+
+  return null;
+}
+
 export function DistributionMap(props: DistributionMapProps) {
+  const [tileSource, setTileSource] = useState<"carto" | "osm">(CARTO_URL ? "carto" : "osm");
+  const [tileError, setTileError] = useState(false);
+  const [tileAttempt, setTileAttempt] = useState(0);
+  const tileFailures = useRef(0);
+
+  const handleTileError = () => {
+    if (tileSource === "carto") {
+      tileFailures.current = 0;
+      setTileSource("osm");
+      return;
+    }
+    tileFailures.current += 1;
+    if (tileFailures.current >= 3) setTileError(true);
+  };
+
+  const retryTiles = () => {
+    tileFailures.current = 0;
+    setTileError(false);
+    setTileAttempt((attempt) => attempt + 1);
+  };
+
   return (
+    <div className="relative">
     <MapContainer
       center={INDONESIA_CENTER}
       zoom={5}
@@ -64,9 +118,20 @@ export function DistributionMap(props: DistributionMapProps) {
       className="z-0 h-[680px] w-full"
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        key={`${tileSource}-${tileAttempt}`}
+        attribution={tileSource === "carto"
+          ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
+        url={tileSource === "carto" && CARTO_URL ? CARTO_URL : OSM_URL}
+        eventHandlers={{
+          tileerror: handleTileError,
+          tileload: () => {
+            tileFailures.current = 0;
+            setTileError(false);
+          },
+        }}
       />
+      <MapSizeController />
       <MapViewportController provinces={props.provinces} focusResults={props.focusResults} />
 
       {props.provinces.map((province) => (
@@ -93,5 +158,11 @@ export function DistributionMap(props: DistributionMapProps) {
       ))}
 
     </MapContainer>
+    {tileError && <div role="alert" className="absolute left-4 top-4 z-[400] max-w-xs rounded-xl border border-amber-200 bg-white/95 p-3 text-xs text-slate-700 shadow-lg">
+      <p className="font-bold text-amber-800">Peta dasar belum dapat dimuat</p>
+      <p className="mt-1 leading-5">Periksa koneksi atau pemblokiran gambar pihak ketiga di browser. Data desa tetap tersedia di bawah peta.</p>
+      <button type="button" onClick={retryTiles} className="mt-2 font-bold text-[#D84315] hover:underline">Coba lagi</button>
+    </div>}
+    </div>
   );
 }

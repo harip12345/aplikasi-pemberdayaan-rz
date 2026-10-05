@@ -9,6 +9,7 @@ import { MultiFilterSelect } from "@/components/MultiFilterSelect";
 
 const DistributionMap = dynamic(() => import("@/components/DistributionMap").then((module) => module.DistributionMap), { ssr: false });
 const EMPTY_PROVINCES: ProvinceDistribution[] = [];
+const VILLAGE_TYPES = ["Desber", "Desbin", "Sister Village", "Desa Kolaborasi"] as const;
 
 type DistributionResponse = {
   provinces: ProvinceDistribution[];
@@ -181,12 +182,26 @@ export default function PetaSebaranPage() {
     const activeVillages = villages.filter((village) => village.status === "Aktif").length;
     const hibernatingVillages = villages.filter((village) => village.status === "Hibernasi").length;
     const graduatedVillages = villages.filter((village) => village.status === "Graduasi").length;
-    const activeVolunteerCount = villages.filter((village) => village.villageType === "Desber" && village.status === "Aktif" && village.volunteer.status === "Aktif").length;
+    const villageTypeCounts = Object.fromEntries(VILLAGE_TYPES.map((type) => [type, 0])) as Record<(typeof VILLAGE_TYPES)[number], number>;
+    const activeVillageTypeCounts = { ...villageTypeCounts };
+    let activeFacilitatorCount = 0;
+    let activeInspirationalVolunteerCount = 0;
+    let activePiPlCount = 0;
     const programCounts = new Map<string, number>();
     let programPoints = 0;
     let integratedVillages = 0;
 
     villages.forEach((village) => {
+      if (village.villageType in villageTypeCounts) {
+        const type = village.villageType as (typeof VILLAGE_TYPES)[number];
+        villageTypeCounts[type] += 1;
+        if (village.status === "Aktif") activeVillageTypeCounts[type] += 1;
+      }
+      if (village.status === "Aktif" && village.volunteer.status === "Aktif") {
+        activeFacilitatorCount += 1;
+        if (village.villageType === "Desber") activeInspirationalVolunteerCount += 1;
+        if (village.villageType === "Desbin") activePiPlCount += 1;
+      }
       if (village.programs.length > 1) integratedVillages += 1;
       village.programs.forEach((program) => {
         const units = village.programUnits?.[program] ?? 1;
@@ -205,7 +220,11 @@ export default function PetaSebaranPage() {
       activeRate: villages.length ? Math.round((activeVillages / villages.length) * 100) : 0,
       hibernatingVillages,
       graduatedVillages,
-      activeVolunteerCount,
+      villageTypeCounts,
+      activeVillageTypeCounts,
+      activeFacilitatorCount,
+      activeInspirationalVolunteerCount,
+      activePiPlCount,
       programPoints,
       integratedVillages,
       dominantProgram: dominantProgram ? { name: dominantProgram[0], count: dominantProgram[1] } : null,
@@ -274,14 +293,38 @@ export default function PetaSebaranPage() {
 
         <div className="grid gap-4 p-6 sm:grid-cols-2 xl:grid-cols-4 xl:px-8">
           <div className="rounded-2xl border border-orange-100 bg-orange-50/55 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#D84315]">Jangkauan pemberdayaan</p>
-            <p className="mt-2 min-h-8 text-2xl font-bold text-ink">{isLoading ? "" : formatNumber(programInsight.villageCount)}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">desa di {formatNumber(programInsight.provinceCount)} provinsi</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#D84315]">Jangkauan pemberdayaan</p>
+                <p className="mt-2 min-h-8 text-2xl font-bold text-ink">{isLoading ? "" : formatNumber(programInsight.villageCount)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">desa di {formatNumber(programInsight.provinceCount)} provinsi</p>
+              </div>
+              <div className="w-[124px] shrink-0 border-l border-orange-200 pl-3 text-[10px] leading-5 text-slate-600">
+                {VILLAGE_TYPES.map((type) => (
+                  <div key={type} className="flex justify-between gap-1">
+                    <span>{type}</span>
+                    <strong className="text-ink">{isLoading ? "–" : formatNumber(programInsight.villageTypeCounts[type])}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/55 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Desa berstatus aktif</p>
-            <p className="mt-2 min-h-8 text-2xl font-bold text-ink">{isLoading ? "" : formatNumber(programInsight.activeVillages)}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{programInsight.activeRate}% dari portofolio wilayah</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Desa berstatus aktif</p>
+                <p className="mt-2 min-h-8 text-2xl font-bold text-ink">{isLoading ? "" : formatNumber(programInsight.activeVillages)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{programInsight.activeRate}% dari portofolio wilayah</p>
+              </div>
+              <div className="w-[124px] shrink-0 border-l border-emerald-200 pl-3 text-[10px] leading-5 text-slate-600">
+                {VILLAGE_TYPES.map((type) => (
+                  <div key={type} className="flex justify-between gap-1">
+                    <span>{type}</span>
+                    <strong className="text-ink">{isLoading ? "–" : formatNumber(programInsight.activeVillageTypeCounts[type])}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="rounded-2xl border border-sky-100 bg-sky-50/55 p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-700">Ekosistem program</p>
@@ -289,9 +332,23 @@ export default function PetaSebaranPage() {
             <p className="mt-1 text-xs leading-5 text-slate-500">titik intervensi lintas bidang</p>
           </div>
           <div className="rounded-2xl border border-violet-100 bg-violet-50/55 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">Relawan Inspirasi aktif</p>
-            <p className="mt-2 min-h-8 text-2xl font-bold text-ink">{isLoading ? "" : formatNumber(programInsight.activeVolunteerCount)}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">mendampingi desa berstatus aktif</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">Fasilitator aktif</p>
+                <p className="mt-2 min-h-8 text-2xl font-bold text-ink">{isLoading ? "" : formatNumber(programInsight.activeFacilitatorCount)}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">mendampingi desa berstatus aktif</p>
+              </div>
+              <div className="w-[124px] shrink-0 border-l border-violet-200 pl-3 text-[10px] leading-5 text-slate-600">
+                <div className="flex justify-between gap-1">
+                  <span>Relawan Inspirasi</span>
+                  <strong className="text-ink">{isLoading ? "–" : formatNumber(programInsight.activeInspirationalVolunteerCount)}</strong>
+                </div>
+                <div className="flex justify-between gap-1">
+                  <span>PI/PL</span>
+                  <strong className="text-ink">{isLoading ? "–" : formatNumber(programInsight.activePiPlCount)}</strong>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

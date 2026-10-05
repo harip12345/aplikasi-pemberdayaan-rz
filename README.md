@@ -166,6 +166,10 @@ FIREBASE_PRIVATE_KEY
 AUTH_ADMIN_EMAILS
 ```
 
+### Peta Desa Berdaya
+
+`NEXT_PUBLIC_CARTO_BASEMAP_KEY` opsional untuk memakai basemap CARTO Voyager. Tanpa key, peta memakai OpenStreetMap; jika CARTO gagal dimuat, peta beralih otomatis ke OpenStreetMap. Nilai ini adalah key publik yang tersedia di browser dan perlu ditambahkan ke environment Vercel bila ingin memakai CARTO.
+
 ### AI dan penyimpanan autentikasi
 
 ```text
