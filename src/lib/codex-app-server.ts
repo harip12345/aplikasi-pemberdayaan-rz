@@ -433,7 +433,7 @@ class CodexAppServerClient {
     return status;
   }
 
-  async runTurn(options: { instructions: string; conversation: string; tools: DynamicTool[]; onToolCall: ToolHandler }) {
+  async runTurn(options: { instructions: string; conversation: string; imageUrls?: string[]; tools: DynamicTool[]; onToolCall: ToolHandler }) {
     // accountStatus synchronizes the encrypted auth file before starting Codex.
     // Keep this order: starting first could make a cold Telegram invocation load
     // stale credentials and only recover after the web assistant was opened.
@@ -472,7 +472,7 @@ class CodexAppServerClient {
     try {
       await this.request("turn/start", {
         threadId,
-        input: [{ type: "text", text: options.conversation }],
+        input: [{ type: "text", text: options.conversation }, ...(options.imageUrls ?? []).map((url) => ({ type: "image", url, detail: "auto" }))],
         model,
         ...(effort ? { effort } : {}),
       });

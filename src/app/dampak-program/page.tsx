@@ -10,6 +10,7 @@ import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache"
 import type { DashboardSheetData, DashboardSheetMetric } from "@/lib/dashboard-sheets";
 import type { ProgramImpactData, ProgramImpactLocationDetail, ProgramImpactParticipantDetail } from "@/lib/program-impact-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
+import { AssistantPageContext } from "@/components/AssistantViewContext";
 
 type ProgramId = "ekonomi" | "pendidikan" | "kesehatan" | "lingkungan" | "dakwah";
 type ImpactIndicator = { id: string; label: string; target: number | null; unit: string; metricId?: string; href?: string };
@@ -116,7 +117,8 @@ export default function DampakProgramPage() {
   };
 
   return <section className="space-y-7">
-    <div className="relative overflow-hidden rounded-[34px] bg-gradient-to-br from-[#0D1B2A] via-[#1B263B] to-[#32415B] p-7 text-white shadow-xl shadow-slate-900/15 lg:p-9">
+    <AssistantPageContext context={{ page: "Dampak Program Pemberdayaan", filters: { periode: periodLabel, program: activeProgram.name }, selection: detailIndicator?.label, summary: activeIndicators.filter((indicator) => indicator.achievement !== null).slice(0, 8).map((indicator) => `${indicator.label}: capaian ${formatNumber(indicator.achievement ?? 0)}, target ${indicator.target == null ? "belum tersedia" : formatNumber(indicator.target)}`) }} />
+    <div data-agent-target="summary" className="relative overflow-hidden rounded-[34px] bg-gradient-to-br from-[#0D1B2A] via-[#1B263B] to-[#32415B] p-7 text-white shadow-xl shadow-slate-900/15 lg:p-9">
       <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-orange-500/15 blur-3xl" />
       <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl"><div className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-white/75">Kerangka Dampak 2026</div><h1 className="mt-4 text-3xl font-bold md:text-4xl">Dampak Program Pemberdayaan</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-white/70">Visualisasi berfokus pada perubahan yang dihasilkan program, bukan hanya jumlah penyaluran. Pilih program untuk melihat indikator, target, capaian, dan kesiapan datanya.</p></div>
@@ -130,7 +132,7 @@ export default function DampakProgramPage() {
       {programs.map((program) => { const Icon = program.icon; const active = activeProgramId === program.id; const hasData = ["ekonomi", "pendidikan", "lingkungan", "dakwah"].includes(program.id); return <button key={program.id} type="button" role="tab" aria-selected={active} onClick={() => setActiveProgramId(program.id)} className={`rounded-[22px] border p-4 text-left transition ${active ? "border-transparent text-white shadow-lg" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:shadow-soft"}`} style={active ? { backgroundColor: program.color } : undefined}><div className="flex items-center justify-between gap-3"><span className={`rounded-xl p-2 ${active ? "bg-white/15" : "bg-slate-100"}`}><Icon size={18} /></span><span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${active ? "bg-white/15 text-white/80" : hasData ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{hasData ? "Data aktif" : "Kerangka"}</span></div><p className="mt-3 text-sm font-bold">{program.name}</p><p className={`mt-1 text-[11px] ${active ? "text-white/70" : "text-slate-400"}`}>{program.indicators.length} indikator dampak</p></button>; })}
     </div>
 
-    <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-soft">
+    <div data-agent-target="results" className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-soft">
       <div className="border-b border-slate-200 p-6 lg:p-7" style={{ backgroundColor: activeProgram.softColor }}><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div className="max-w-3xl"><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: activeProgram.color }}>{activeProgram.eyebrow}</p><h2 className="mt-2 text-2xl font-bold text-ink">{activeProgram.name}</h2><p className="mt-2 text-sm leading-6 text-slate-600">{activeProgram.description}</p></div><div className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-600"><Target size={15} style={{ color: activeProgram.color }} /> Target dampak {year}</div></div></div>
       <div className="p-6 lg:p-7">
         {activeProgramId === "ekonomi" ? <div className="space-y-7">

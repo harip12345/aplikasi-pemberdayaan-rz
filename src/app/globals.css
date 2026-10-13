@@ -32,6 +32,23 @@ a {
   border-radius: 24px;
 }
 
+.dashboard-metric-card {
+  container: dashboard-card / inline-size;
+}
+
+.assistant-action-highlight {
+  outline: 4px solid #f97316;
+  outline-offset: 5px;
+  box-shadow: 0 0 0 10px rgba(249, 115, 22, 0.18);
+  transition: outline-color 250ms ease, box-shadow 250ms ease;
+}
+
+@container dashboard-card (max-width: 340px) {
+  .dashboard-value-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @keyframes analysis-cta-sweep {
   0%, 42% { transform: translateX(-170%) skewX(-18deg); }
   72%, 100% { transform: translateX(240%) skewX(-18deg); }

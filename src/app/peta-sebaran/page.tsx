@@ -6,6 +6,9 @@ import { Apple, Baby, BadgeCheck, BookOpen, CalendarDays, Camera, CircleDot, Gra
 import { ProvinceDistribution, VillageProfile } from "@/data/distribution";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import { MultiFilterSelect } from "@/components/MultiFilterSelect";
+import { AssistantPageContext } from "@/components/AssistantViewContext";
+import { finishAssistantAction, useAssistantActions } from "@/components/AssistantActionContext";
+import { resolveActionValues } from "@/lib/assistant-view-action";
 
 const DistributionMap = dynamic(() => import("@/components/DistributionMap").then((module) => module.DistributionMap), { ssr: false });
 const EMPTY_PROVINCES: ProvinceDistribution[] = [];
@@ -45,6 +48,7 @@ function programIcon(program: string) {
 const matchesSelection = (selected: string[], value: string) => selected.length === 0 || selected.includes(value);
 
 export default function PetaSebaranPage() {
+  const { pending, complete } = useAssistantActions();
   const cachedDistribution = getCachedJsonSnapshot<DistributionResponse>("distribution-sheet-production-v4");
   const [distribution, setDistribution] = useState<DistributionResponse | null>(cachedDistribution);
   const [isLoading, setIsLoading] = useState(!cachedDistribution);
@@ -62,6 +66,7 @@ export default function PetaSebaranPage() {
   const [branchFilter, setBranchFilter] = useState<string[]>([]);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
   const [selectedProgramQuery, setSelectedProgramQuery] = useState("");
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const loadDistribution = useCallback(async (forceRefresh = true) => {
     setIsLoading(true);
@@ -88,7 +93,7 @@ export default function PetaSebaranPage() {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : "Data tidak dapat dimuat.");
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) { setIsLoading(false); setInitialLoadDone(true); }
       });
 
     return () => {
@@ -102,6 +107,30 @@ export default function PetaSebaranPage() {
     provinceDistributions.forEach((province) => province.villages.forEach((village) => village.programs.forEach((program) => programs.add(program))));
     return [...programs].sort((a, b) => a.localeCompare(b, "id"));
   }, [provinceDistributions]);
+
+  useEffect(() => {
+    if (!pending || pending.action.target !== "/peta-sebaran" || !initialLoadDone) return;
+    if (!distribution) { complete(pending.id, loadError || "Data Desa Berdaya belum tersedia."); return; }
+    try {
+      const requested = pending.action.filters;
+      const allVillages = distribution.provinces.flatMap((province) => province.villages.map((village) => ({ ...village, province: province.name })));
+      const branch = resolveActionValues(requested?.branch, [...new Set(allVillages.map((village) => village.branch).filter(Boolean))], "Cabang");
+      const province = resolveActionValues(requested?.province, [...new Set(allVillages.filter((village) => matchesSelection(branch, village.branch)).map((village) => village.province))], "Provinsi");
+      const city = resolveActionValues(requested?.city, [...new Set(allVillages.filter((village) => matchesSelection(branch, village.branch) && matchesSelection(province, village.province)).map((village) => village.regency))], "Kota/Kab");
+      const district = resolveActionValues(requested?.district, [...new Set(allVillages.filter((village) => matchesSelection(branch, village.branch) && matchesSelection(province, village.province) && matchesSelection(city, village.regency)).map((village) => village.district))], "Kecamatan");
+      const village = resolveActionValues(requested?.village, [...new Set(allVillages.filter((item) => matchesSelection(branch, item.branch) && matchesSelection(province, item.province) && matchesSelection(city, item.regency) && matchesSelection(district, item.district)).map((item) => item.name))], "Desa");
+      const program = resolveActionValues(requested?.program, availablePrograms, "Program");
+      const status = resolveActionValues(requested?.status, [...new Set(allVillages.map((item) => item.status))], "Ket. Desber");
+      const villageType = resolveActionValues(requested?.villageType, [...new Set(allVillages.map((item) => item.villageType))], "Status Desber");
+      if (!allVillages.some((item) => matchesSelection(branch, item.branch) && matchesSelection(province, item.province) && matchesSelection(city, item.regency) && matchesSelection(district, item.district) && matchesSelection(village, item.name) && matchesSelection(status, item.status) && matchesSelection(villageType, item.villageType) && (!program.length || program.some((value) => item.programs.includes(value))))) throw new Error("Kombinasi filter tidak menghasilkan desa.");
+      const timer = window.setTimeout(() => {
+        setBranchFilter(branch); setProvinceFilter(province); setRegencyFilter(city); setDistrictFilter(district); setVillageFilter(village); setProgramFilter(program); setStatusFilter(status); setVillageTypeFilter(villageType);
+        setSelectedProvince(null); setSelectedVillage(null); setSelectedProgram(null); setQuery("");
+        finishAssistantAction(pending.id, pending.action.highlight, complete);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    } catch (error) { complete(pending.id, error instanceof Error ? error.message : "Filter Desa Berdaya tidak dapat diterapkan."); }
+  }, [pending, initialLoadDone, distribution, loadError, availablePrograms, complete]);
 
   const availableProvinces = useMemo(() => provinceDistributions
     .filter((province) => province.villages.some((village) => matchesSelection(branchFilter, village.branch)))
@@ -277,7 +306,8 @@ export default function PetaSebaranPage() {
 
   return (
     <section className="space-y-6">
-      <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-soft">
+      <AssistantPageContext context={{ page: "Peta Desa Berdaya", filters: { status: statusFilter, jenisDesa: villageTypeFilter, program: programFilter, provinsi: provinceFilter, kotaKab: regencyFilter, kecamatan: districtFilter, desa: villageFilter, cabang: branchFilter }, selection: selectedVillage ? `Desa ${selectedVillage.name}` : selectedProvince ? `Provinsi ${selectedProvince.name}` : selectedProgram ? `Program ${selectedProgram}` : undefined, summary: distribution ? [`Desa sesuai filter: ${formatNumber(filteredVillageCount)}`, `Provinsi sesuai filter: ${filteredProvinceDistributions.length}`, ...programSummaries.slice(0, 4).map((program) => `${program.name}: ${formatNumber(program.count)} titik program`)] : [] }} />
+      <div data-agent-target="summary" className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-soft">
         <div className="relative overflow-hidden border-b border-slate-800 bg-gradient-to-br from-[#0D1B2A] via-[#1B263B] to-[#32415B] px-6 py-8 text-white xl:px-8">
           <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-orange-500/20 blur-3xl" />
           <div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-orange-600/10 blur-3xl" />
@@ -406,7 +436,7 @@ export default function PetaSebaranPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-[32px] border border-white/70 bg-white shadow-soft">
+      <div data-agent-target="map" className="overflow-hidden rounded-[32px] border border-white/70 bg-white shadow-soft">
         <div className="border-b border-slate-100 px-6 py-5">
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div>
@@ -416,7 +446,7 @@ export default function PetaSebaranPage() {
             <div className="flex min-h-4 items-center gap-2 text-xs text-slate-500"><span className="h-2.5 w-2.5 rounded-full bg-[#D84315]" /> {isLoading ? "" : `${formatNumber(filteredVillageCount)} desa ditampilkan`}</div>
           </div>
 
-          <div className="mt-5 overflow-x-auto pb-1">
+          <div data-agent-target="filters" className="mt-5 overflow-x-auto pb-1">
             <div className="grid min-w-[1480px] grid-cols-[repeat(8,minmax(145px,1fr))_auto] gap-3">
               <MultiFilterSelect label="Provinsi" values={provinceFilter} options={availableProvinces} onChange={(values) => { setProvinceFilter(values); setRegencyFilter([]); setDistrictFilter([]); setVillageFilter([]); }} />
               <MultiFilterSelect label="Kota/Kab" values={regencyFilter} options={availableRegencies} onChange={(values) => { setRegencyFilter(values); setDistrictFilter([]); setVillageFilter([]); }} />
@@ -439,7 +469,7 @@ export default function PetaSebaranPage() {
         />
       </div>
 
-      <div className="rounded-[28px] bg-white/85 p-6 shadow-soft">
+      <div data-agent-target="results" className="rounded-[28px] bg-white/85 p-6 shadow-soft">
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
           <div>
             <div className="flex items-center gap-2 text-[#D84315]"><CircleDot size={18} /><p className="text-sm font-semibold">Program pada database</p></div>

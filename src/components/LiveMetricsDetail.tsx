@@ -9,6 +9,7 @@ import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache"
 import type { DashboardSheetData } from "@/lib/dashboard-sheets";
 import type { MetricDetailData, MetricDetailDataset } from "@/lib/metric-detail-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
+import { AssistantPageContext } from "@/components/AssistantViewContext";
 
 const visualizationFallback = () => <div className="h-80 animate-pulse rounded-[28px] border border-slate-200 bg-slate-100" />;
 const MetricDataInsights = dynamic(() => import("@/components/MetricDataInsights").then((module) => module.MetricDataInsights), { loading: visualizationFallback });
@@ -70,6 +71,7 @@ export function LiveMetricsDetail({ metricId }: { metricId: string }) {
   }) ?? [];
 
   return <section className="space-y-6 rounded-[32px] bg-white/60 p-5 shadow-soft backdrop-blur-sm xl:p-8">
+    <AssistantPageContext context={{ page: metric.title, filters: { tahun: String(year), pencarianDetail: query }, summary: isSummaryAvailable ? [`Capaian: ${formatNumber(metric.achievement)} ${metric.unit}`, `Target: ${formatNumber(metric.target)} ${metric.unit}`, `Persentase: ${percent}%`] : [] }} />
     <div className="flex flex-wrap items-center justify-between gap-3"><Link href="/" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-orange-200 hover:text-primary"><ArrowLeft size={16} /> Kembali ke Dashboard</Link><button onClick={() => void loadData(true)} disabled={isLoading} className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm font-semibold text-[#D84315] disabled:opacity-50"><RefreshCw size={15} className={isLoading ? "animate-spin" : ""} /> Muat ulang</button></div>
 
     <div><div className="flex flex-wrap items-center gap-3"><div className="rounded-2xl px-3 py-1 text-sm font-medium text-white" style={{ backgroundColor: metric.color }}>{metric.shortTitle}</div><div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-1 text-sm text-slate-600">Tahun {year}</div></div><h1 className="mt-4 text-3xl font-bold text-ink">{metric.title}</h1><p className="mt-2 max-w-3xl text-slate-600">{metric.description}</p></div>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { codexAppServer } from "@/lib/codex-app-server";
-import { aiProviderLabel, configuredAiProvider, configuredCodexModel, resolveHttpAiProvider } from "@/lib/ai-providers";
+import { aiProviderLabel, configuredAiProvider, resolveHttpAiProvider } from "@/lib/ai-providers";
 import { inspectCodexAuthPersistence, isCodexAuthPersistenceConfigured } from "@/lib/codex-auth-storage";
 import { isAdminEmail } from "@/lib/auth-config";
 import { getCurrentSession } from "@/lib/firebase/auth-server";
@@ -28,7 +28,6 @@ export async function GET() {
       return NextResponse.json({
         provider,
         label: aiProviderLabel(provider),
-        model: configuredCodexModel(),
         connected: account.connected,
         loginAvailable,
         canManageLogin: admin,
@@ -44,7 +43,7 @@ export async function GET() {
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const resolved = resolveHttpAiProvider();
-    return NextResponse.json({ provider, label: resolved.label, model: resolved.model, connected: true, planType: null, message: "Provider dikonfigurasi melalui environment server." }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ provider, label: resolved.label, connected: true, planType: null, message: "Provider dikonfigurasi melalui environment server." }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ connected: false, message: error instanceof Error ? error.message : "Status provider AI tidak dapat dibaca." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

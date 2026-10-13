@@ -9,6 +9,8 @@ import {
 } from "recharts";
 import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
 import type { AchievementAnalysis, ParticipantAnalysisData, ParticipantMonthlyGroup } from "@/lib/participant-analysis";
+import { AssistantPageContext } from "@/components/AssistantViewContext";
+import { finishAssistantAction, useAssistantActions } from "@/components/AssistantActionContext";
 
 const CACHE_KEY = "participant-analysis-v7";
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -116,6 +118,7 @@ function SelectField({ label, value, onChange, children }: { label: string; valu
 }
 
 export function ParticipantAnalysisView() {
+  const { pending, complete } = useAssistantActions();
   const cached = getCachedJsonSnapshot<ParticipantAnalysisData>(CACHE_KEY);
   const [data, setData] = useState<ParticipantAnalysisData | null>(cached);
   const [view, setView] = useState<ViewMode>("summary");
@@ -125,6 +128,7 @@ export function ParticipantAnalysisView() {
   const [selectedKey, setSelectedKey] = useState("");
   const [isLoading, setIsLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const load = async (forceRefresh = false) => {
     setIsLoading(true); setError(null);
@@ -142,9 +146,20 @@ export function ParticipantAnalysisView() {
     fetchCachedJson<ParticipantAnalysisData>(CACHE_KEY, "/api/participant-analysis")
       .then((nextData) => { if (!cancelled) { setData(nextData); setEndMonthIndex(nextData.monthly.latestMonthIndex); } })
       .catch((loadError: unknown) => { if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Data analisa tidak dapat dimuat."); })
-      .finally(() => { if (!cancelled) setIsLoading(false); });
+      .finally(() => { if (!cancelled) { setIsLoading(false); setInitialLoadDone(true); } });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!pending || pending.action.target !== "/analisa-capaian-pp" || !initialLoadDone) return;
+    if (!data) { complete(pending.id, error || "Data analisa belum tersedia."); return; }
+    const timer = window.setTimeout(() => {
+      if (pending.action.highlight === "ranking") setView("comparison");
+      else if (pending.action.highlight === "trend" || pending.action.highlight === "summary") setView("summary");
+      finishAssistantAction(pending.id, pending.action.highlight, complete);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pending, initialLoadDone, data, error, complete]);
 
   const summaryRows = useMemo<SummaryRow[]>(() => scope === "program"
     ? data?.rows.map((row) => ({ key: row.program, label: row.program, pp: row.pp, plp: row.plp })) ?? []
@@ -161,7 +176,8 @@ export function ParticipantAnalysisView() {
   }).sort((a, b) => b.targetRate - a.targetRate), [monthlyGroups, endMonthIndex]);
   const periodLabel = `${MONTHS[startMonthIndex]}–${MONTHS[endMonthIndex]} ${data?.year ?? ""}`;
 
-  return <section className="space-y-5">
+  return <section data-agent-target="summary" className="space-y-5">
+    <AssistantPageContext context={{ page: "Analisa Capaian PP dan PLP", filters: { tampilan: view === "summary" ? "Ringkasan PP & PLP" : view === "monthly" ? "Analisa Bulanan" : "Perbandingan Kinerja", cakupan: scope === "program" ? "Per Program" : "Per Divisi", periode: view === "summary" ? `Keseluruhan ${data?.year ?? ""}` : periodLabel }, selection: view === "monthly" ? selectedGroup?.label : undefined, summary: view === "monthly" && selectedGroup ? [`Capaian periode ${formatNumber(periodMetric.achievement)}`, `Target periode ${formatNumber(periodMetric.target)}`, `History periode ${formatNumber(periodMetric.history)}`] : data ? [`Capaian PP keseluruhan ${formatNumber(data.totals.pp.achievement)}`, `Target PP keseluruhan ${formatNumber(data.totals.pp.target)}`, `Capaian PLP keseluruhan ${formatNumber(data.totals.plp.achievement)}`] : [] }} />
     <header className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#0D1B2A] via-[#172436] to-[#30405A] p-6 text-white shadow-xl shadow-black/10 lg:p-8"><div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" /><div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><Link href="/ikhtisar-pp-plp" className="inline-flex items-center gap-2 text-xs font-semibold text-white/65 hover:text-white"><ArrowLeft size={14} /> Kembali ke Peserta Program</Link><p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">Analisa Capaian {data?.year ?? ""}</p><h1 className="mt-2 max-w-4xl text-3xl font-extrabold tracking-tight lg:text-4xl">Kinerja Peserta Program dan Peserta Layanan Program</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-white/65">Ringkasan kinerja, perkembangan bulanan, dan posisi capaian program serta divisi.</p></div><div className="flex flex-wrap gap-2"><a href={view === "monthly" || view === "comparison" ? (scope === "program" ? data?.monthly?.programSourceUrl : data?.monthly?.divisionSourceUrl) : data?.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs font-semibold text-white/80 hover:bg-white/10"><ExternalLink size={14} /> Buka sumber</a><button type="button" onClick={() => void load(true)} disabled={isLoading} className="inline-flex items-center gap-2 rounded-xl bg-[#F2662F] px-4 py-3 text-xs font-bold text-white disabled:opacity-50"><RefreshCw size={14} className={isLoading ? "animate-spin" : ""} /> Muat ulang</button></div></div></header>
 
     {error && <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
@@ -172,11 +188,11 @@ export function ParticipantAnalysisView() {
 
     {!data && <div className="h-96 animate-pulse rounded-[24px] bg-slate-100" />}
     {data && view === "summary" && <div className="space-y-5">
-      <section className="space-y-6 rounded-[26px] border border-amber-200 bg-amber-50/70 p-4 sm:p-5"><OverallPerformanceSummary kind="PP" metric={data.totals.pp} year={data.year} rateReference={data.monthlyReference.pp} /><PpTrendAnalysis groups={data.monthly.programs} annualTarget={data.totals.pp.target} year={data.year} latestMonthIndex={data.monthly.latestMonthIndex} /><PortfolioSection kind="PP" rows={summaryRows} year={data.year} onSelect={(row) => { const monthlyGroup = monthlyGroups.find((group) => group.label === row.label); if (!monthlyGroup) return; setSelectedKey(monthlyGroup.key); setView("monthly"); }} /></section>
+      <section data-agent-target="results" className="space-y-6 rounded-[26px] border border-amber-200 bg-amber-50/70 p-4 sm:p-5"><OverallPerformanceSummary kind="PP" metric={data.totals.pp} year={data.year} rateReference={data.monthlyReference.pp} /><div data-agent-target="trend"><PpTrendAnalysis groups={data.monthly.programs} annualTarget={data.totals.pp.target} year={data.year} latestMonthIndex={data.monthly.latestMonthIndex} /></div><PortfolioSection kind="PP" rows={summaryRows} year={data.year} onSelect={(row) => { const monthlyGroup = monthlyGroups.find((group) => group.label === row.label); if (!monthlyGroup) return; setSelectedKey(monthlyGroup.key); setView("monthly"); }} /></section>
       <section className="space-y-6 rounded-[26px] border border-pink-200 bg-pink-50/65 p-4 sm:p-5"><OverallPerformanceSummary kind="PLP" metric={data.totals.plp} year={data.year} /><PortfolioSection kind="PLP" rows={summaryRows} year={data.year} /></section>
     </div>}
     {data && view === "monthly" && selectedGroup && <MonthlyView group={selectedGroup} points={selectedPoints} metric={periodMetric} annualTarget={selectedAnnualMetric?.target ?? 0} snapshot={snapshot} periodLabel={periodLabel} endMonth={MONTHS[endMonthIndex]} year={data.year} />}
-    {data && view === "comparison" && <ComparisonView rows={comparisonRows} endMonthIndex={endMonthIndex} scope={scope} />}
+    {data && view === "comparison" && <div data-agent-target="ranking"><ComparisonView rows={comparisonRows} endMonthIndex={endMonthIndex} scope={scope} /></div>}
   </section>;
 }
 
