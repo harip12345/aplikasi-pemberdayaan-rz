@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowUpRight, Bot, CheckCircle2, Compass, Copy, ExternalLink, FileText, HandCoins, Image as ImageIcon, Loader2, LogIn, Paperclip, RotateCcw, Send, Sparkles, Users, X } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Bot, CheckCircle2, Compass, Copy, ExternalLink, FileText, HandCoins, Image as ImageIcon, Loader2, LogIn, MessageCircle, Paperclip, RotateCcw, Send, Sparkles, Users, X } from "lucide-react";
 import { useReportingPeriod } from "@/components/ReportingPeriodContext";
 import { useAssistantView } from "@/components/AssistantViewContext";
 import { usePathname } from "next/navigation";
@@ -78,11 +78,12 @@ function sourceDateLabel(source: SourceLink) {
   return Number.isNaN(parsed.getTime()) ? "Tanggal publikasi tidak tersedia" : parsed.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
-export function SmartAssistant({ isOpen }: { isOpen: boolean; onClose: () => void }) {
+export function SmartAssistant() {
   const { period } = useReportingPeriod();
   const viewContext = useAssistantView();
   const assistantActions = useAssistantActions();
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -238,7 +239,15 @@ export function SmartAssistant({ isOpen }: { isOpen: boolean; onClose: () => voi
   const welcomeStatus = status?.connected ? "Asisten siap menelusuri data sesuai halaman dan filter aktif." : status?.message?.includes("Silakan masuk") ? "Silakan masuk untuk menggunakan asisten." : status ? "Asisten belum tersedia. Jika masalah berlanjut, hubungi admin." : "Memeriksa ketersediaan asisten…";
   const suggestionIcons = [Sparkles, Users, HandCoins];
 
-  return <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F8FAFC]" aria-label="Asisten Data Program RZ">
+  return <>
+    {!isOpen && <button type="button" onClick={() => setIsOpen(true)} className="fixed bottom-6 right-5 z-[70] flex items-center gap-2 rounded-full bg-gradient-to-r from-[#D84315] to-[#F26A2E] px-5 py-3.5 font-semibold text-white shadow-xl shadow-orange-900/25 transition hover:-translate-y-0.5 hover:shadow-2xl" aria-label="Buka Asisten Data Program RZ"><MessageCircle size={20} /><span className="hidden sm:inline">Asisten Program RZ</span></button>}
+
+    {isOpen && <section className="fixed inset-x-3 bottom-3 top-20 z-[70] flex min-h-0 flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-[#F8FAFC] shadow-2xl sm:inset-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[calc(100dvh-2.5rem)] sm:max-h-[680px] sm:w-[430px] sm:max-w-[calc(100vw-2.5rem)]" aria-label="Asisten Data Program RZ">
+      <header className="flex shrink-0 items-center gap-3 bg-gradient-to-r from-[#172436] to-[#2D4057] px-4 py-3.5 text-white">
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F2662F]"><Bot size={21} /></span>
+        <div className="min-w-0 flex-1"><h2 className="font-bold">Asisten Data Program RZ</h2><p className="truncate text-[11px] text-white/65">{connectionText}</p></div>
+        <button type="button" onClick={() => setIsOpen(false)} className="rounded-xl p-2 text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Tutup Asisten Data Program RZ"><X size={19} /></button>
+      </header>
       <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500"><div className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate"><span className="font-semibold text-[#B9380D]">Melihat:</span> {viewContext?.page || "Halaman aplikasi"}{viewContext?.selection ? ` · ${viewContext.selection}` : ""}</span>{telegramUrl && <a href={telegramUrl} target="_blank" rel="noreferrer" className="rounded-lg p-1.5 text-[#B9380D] transition hover:bg-orange-50" aria-label="Buka bot Telegram"><Send size={15} /></a>}</div><div className="mt-1.5 flex items-center justify-between gap-2"><span className="truncate text-[10px] text-slate-400">{typeof viewContext?.filters?.periode === "string" ? viewContext.filters.periode : period ? reportingPeriodLabel(period) : "Filter halaman aktif"}</span><span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${status?.connected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{connectionText}</span></div></div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
@@ -274,5 +283,6 @@ export function SmartAssistant({ isOpen }: { isOpen: boolean; onClose: () => voi
         {error && <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</div>}
       </div>
       <div className="shrink-0 border-t border-slate-200 bg-white p-3"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] text-slate-400">Gambar dan berkas teks diproses untuk pesan ini saja.</p>{messages.length > 0 && <button type="button" onClick={() => { setMessages([]); setError(null); }} className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-[#D84315]"><RotateCcw size={11} /> Hapus chat</button>}</div>{pendingFiles.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{pendingFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-lg bg-orange-50 px-2 py-1 text-[11px] text-orange-800">{IMAGE_TYPES.has(attachmentMimeType(file)) ? <ImageIcon size={12} /> : <FileText size={12} />}<span className="max-w-[190px] truncate">{file.name}</span><button type="button" onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Hapus lampiran ${file.name}`}><X size={12} /></button></span>)}</div>}<form onSubmit={(event) => { event.preventDefault(); void sendMessage(); }} className="flex items-end gap-2"><input ref={fileInputRef} type="file" multiple accept="image/png,image/jpeg,image/webp,.txt,.md,.csv,.json" className="sr-only" onChange={(event) => addAttachments(event.target.files)} /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={isSending || status?.connected === false} className="flex h-11 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-orange-300 hover:text-[#D84315] disabled:opacity-40" aria-label="Tambahkan gambar atau berkas" title="PNG, JPG, WebP, TXT, MD, CSV, JSON"><Paperclip size={18} /></button><textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} rows={1} placeholder="Tanyakan data pemberdayaan…" className="max-h-28 min-h-11 min-w-0 flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-orange-300 focus:bg-white" /><button type="submit" disabled={(!input.trim() && pendingFiles.length === 0) || isSending || status?.connected === false} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#D84315] text-white transition hover:bg-[#BF360C] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Kirim pertanyaan"><Send size={17} /></button></form></div>
-    </section>;
+    </section>}
+  </>;
 }

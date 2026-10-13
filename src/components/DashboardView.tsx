@@ -173,7 +173,7 @@ export function DashboardView() {
 
       <div data-agent-target="results" className="rounded-3xl bg-white/80 p-6 shadow-soft backdrop-blur-sm">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-[#D84315]">Objectif and Key Result (OKR) Program{displayedPeriod ? ` · ${displayedPeriod}` : ""}</p><h2 className="mt-1 text-2xl font-bold text-ink">Target, Capaian, dan Persentase</h2></div><p className="max-w-xl text-sm text-slate-500 sm:text-right">Target merupakan target tahunan. Capaian menampilkan hasil pada rentang bulan yang dipilih.</p></div>
-        <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {dashboardMetrics.map((metric) => <Suspense key={metric.id} fallback={<div className="h-[340px] animate-pulse rounded-2xl bg-slate-100" />}><DashboardCard metric={metric} isDataAvailable={Boolean(sheetData?.metrics.some((item) => item.id === metric.id))} dataThroughLabel={metric.dataThroughMonthIndex !== undefined ? months[metric.dataThroughMonthIndex] : undefined} /></Suspense>)}
         </div>
       </div>
