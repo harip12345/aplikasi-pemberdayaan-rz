@@ -22,7 +22,7 @@ const navItems = [
   { href: "/dampak-program", label: "Dampak Program", icon: BarChart3 },
 ];
 
-export function TopBar({ onAssistantOpen, onAssistantClose, assistantOpen }: { onAssistantOpen: () => void; onAssistantClose: () => void; assistantOpen: boolean }) {
+export function TopBar({ onAssistantClose, assistantOpen }: { onAssistantClose: () => void; assistantOpen: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [openMobile, setOpenMobile] = useState(false);
@@ -63,7 +63,6 @@ export function TopBar({ onAssistantOpen, onAssistantClose, assistantOpen }: { o
           })}
         </nav>
 
-        {!assistantOpen && <button type="button" onClick={onAssistantOpen} className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25" aria-label="Buka Asisten Data Program RZ" title="Buka Asisten AI"><Bot size={19} /><span className="hidden 2xl:inline">Asisten AI</span></button>}
         <UserMenu />
 
         <button onClick={() => setOpenMobile(!openMobile)} className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white ${assistantOpen ? "2xl:hidden" : "lg:hidden"}`}>
