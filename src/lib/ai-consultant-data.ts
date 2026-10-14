@@ -121,7 +121,7 @@ function detailMatches(detail: ProgramImpactLocationDetail, input: ProgramImpact
 }
 
 export async function queryProgramImpacts(input: ProgramImpactQuery, forceRefresh = false) {
-  const data = await getServerCachedData("ai-program-impact-v1", () => getProgramImpactData(forceRefresh), forceRefresh);
+  const data = await getServerCachedData("ai-program-impact-v2", () => getProgramImpactData(forceRefresh), forceRefresh);
   const selected = data.indicators.filter((indicator) => !input.indicator || indicator.id === input.indicator);
   const filtersActive = Boolean(input.province || input.city || input.branch);
   const limit = Math.max(1, Math.min(200, input.limit ?? 50));
@@ -154,8 +154,8 @@ export async function queryProgramImpacts(input: ProgramImpactQuery, forceRefres
     year: data.year,
     filters: { indicator: input.indicator, province: input.province, city: input.city, branch: input.branch },
     indicators,
-    calculation: "Terserap kerja dan berwirausaha dihitung dari status hasil peserta vokasi; Hafidz dihitung dari peserta dengan capaian 30 juz; Bank Sampah, Mangrove, Masjid Berdaya, dan PP Terbina dihitung dari baris detail valid pada sumber masing-masing.",
-    quality: { isValid: selected.length > 0 && indicators.every((indicator) => indicator.filterAvailable), rowsRead: data.quality.vocation.rowsRead + data.quality.hafidz.rowsRead + data.quality.environment.rowsRead + data.quality.masjidBerdaya.rowsRead + data.quality.ppTerbina.rowsRead, rowsAccepted: indicators.reduce((sum, indicator) => sum + (indicator.achievement ?? 0), 0), rowsRejected: 0, checkedAt: data.updatedAt, issues: indicators.filter((indicator) => !indicator.filterAvailable).map((indicator) => `Filter wilayah belum tersedia untuk ${indicator.id}.`) },
+    calculation: "Capaian peserta vokasi dengan keahlian (434) adalah input manual dan belum memiliki sumber rincian. Posyandu dan Kader dijumlahkan dari baris desa bernomor pada kolom W/X sheet Resume, tanpa baris judul atau kontrol. Terserap kerja dan berwirausaha dihitung dari status hasil peserta vokasi; Hafidz dihitung dari peserta dengan capaian 30 juz; Bank Sampah, Mangrove, Masjid Berdaya, dan PP Terbina dihitung dari baris detail valid pada sumber masing-masing.",
+    quality: { isValid: selected.length > 0 && indicators.every((indicator) => indicator.filterAvailable), rowsRead: data.quality.vocation.rowsRead + data.quality.hafidz.rowsRead + data.quality.health.rowsRead + data.quality.environment.rowsRead + data.quality.masjidBerdaya.rowsRead + data.quality.ppTerbina.rowsRead, rowsAccepted: indicators.reduce((sum, indicator) => sum + (indicator.achievement ?? 0), 0), rowsRejected: 0, checkedAt: data.updatedAt, issues: indicators.filter((indicator) => !indicator.filterAvailable).map((indicator) => `Filter wilayah belum tersedia untuk ${indicator.id}.`) },
     provenance: Object.fromEntries(indicators.map((indicator) => [indicator.id, { sourceLabel: indicator.sourceLabel, sheetUrl: indicator.sourceUrl, updatedAt: data.updatedAt }])),
   };
 }

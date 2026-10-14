@@ -24,7 +24,7 @@ export type ProgramImpactParticipantDetail = {
 };
 
 export type ProgramImpactIndicator = {
-  id: "terserap-kerja" | "wirausaha" | "hafiz" | "bank-sampah" | "mangrove" | "masjid" | "pp-terbina";
+  id: "vokasi-keahlian" | "terserap-kerja" | "wirausaha" | "hafiz" | "posyandu" | "kader" | "bank-sampah" | "mangrove" | "masjid" | "pp-terbina";
   achievement: number;
   sourceLabel: string;
   sourceUrl: string;
@@ -40,6 +40,7 @@ export type ProgramImpactData = {
     vocation: { rowsRead: number; rowsAccepted: number; rowsRejected: number };
     hafidz: { rowsRead: number; rowsAccepted: number; rowsRejected: number };
     environment: { rowsRead: number; bankSampahMatched: number; mangroveMatched: number; isValid: boolean };
+    health: { rowsRead: number; rowsAccepted: number; invalidCells: number; isValid: boolean };
     masjidBerdaya: { rowsRead: number; rowsMatched: number; isValid: boolean };
     ppTerbina: { rowsRead: number; rowsAccepted: number; rowsRejected: number; isValid: boolean };
   };
@@ -115,6 +116,43 @@ async function loadHafidzImpact() {
   const validRows = rows.filter((row) => row[nameColumn]?.trim() && /\b30\s*juz\b/i.test(row[hafidzColumn] ?? ""));
   const details: ProgramImpactParticipantDetail[] = validRows.map((row, index) => ({ id: `hafidz-${index + 1}`, name: row[nameColumn].trim(), outcome: "Hafidz 30 juz" }));
   return { total: validRows.length, details, rowsRead: rows.length, rowsAccepted: validRows.length, rowsRejected: rows.length - validRows.length, source };
+}
+
+function parseWholeCount(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  if (/^\d{1,3}(?:[.,]\d{3})+$/.test(trimmed)) return Number(trimmed.replace(/[.,]/g, ""));
+  return null;
+}
+
+async function loadHealthImpact() {
+  const { source, csvUrl } = sourceCsvUrl("health-impact");
+  const table = parseCsv((await fetchGoogleSheetCsv(csvUrl, 1)).replace(/^\uFEFF/, ""));
+  const posyanduColumn = 22; // W
+  const cadreColumn = 23; // X
+  const headers = table[1] ?? [];
+  if (normalized(headers[posyanduColumn] ?? "") !== "jumlah posyandu yang dibina" || normalized(headers[cadreColumn] ?? "") !== "jumlah kader penggerak utama") {
+    throw new Error("Kolom W/X pada Resume dampak kesehatan tidak sesuai dengan format yang diharapkan.");
+  }
+
+  // Kolom A bernomor hanya untuk baris desa; baris judul, kontrol, dan total tidak dijumlahkan.
+  const rows = table.filter((row) => /^\d+$/.test((row[0] ?? "").trim()));
+  let posyandu = 0;
+  let kader = 0;
+  let invalidCells = 0;
+  let rowsAccepted = 0;
+  for (const row of rows) {
+    const posyanduValue = parseWholeCount(row[posyanduColumn] ?? "");
+    const cadreValue = parseWholeCount(row[cadreColumn] ?? "");
+    if (posyanduValue === null) invalidCells += 1;
+    else posyandu += posyanduValue;
+    if (cadreValue === null) invalidCells += 1;
+    else kader += cadreValue;
+    if (posyanduValue !== null || cadreValue !== null) rowsAccepted += 1;
+  }
+  if (rows.length === 0 || rowsAccepted === 0) throw new Error("Tidak ada baris data bernomor yang dapat dibaca pada Resume dampak kesehatan.");
+  return { posyandu, kader, rowsRead: rows.length, rowsAccepted, invalidCells, source };
 }
 
 async function loadEnvironmentImpact() {
@@ -195,9 +233,10 @@ async function loadMasjidBerdayaImpact() {
 }
 
 export async function getProgramImpactData(forceRefresh = false): Promise<ProgramImpactData> {
-  const [vocation, hafidz, environment, masjidBerdaya, ppTerbina] = await Promise.all([
+  const [vocation, hafidz, health, environment, masjidBerdaya, ppTerbina] = await Promise.all([
     getServerCachedData("impact-vocation-v2", loadVocationImpact, forceRefresh),
     getServerCachedData("impact-hafidz-v2", loadHafidzImpact, forceRefresh),
+    getServerCachedData("impact-health-resume-v1", loadHealthImpact, forceRefresh).catch(() => null),
     getServerCachedData("impact-environment-v1", loadEnvironmentImpact, forceRefresh),
     getServerCachedData("impact-masjid-berdaya-v1", loadMasjidBerdayaImpact, forceRefresh),
     queryDetailData({ source: "details", metricId: "pp-terbina" }, forceRefresh),
@@ -206,9 +245,14 @@ export async function getProgramImpactData(forceRefresh = false): Promise<Progra
   return {
     year: vocation.year,
     indicators: [
+      { id: "vokasi-keahlian", achievement: 434, sourceLabel: "Input manual — sumber rincian belum tersedia", sourceUrl: "", dataThrough: "2026" },
       { id: "terserap-kerja", achievement: vocation.employed, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year), participantDetails: vocation.details.filter((detail) => detail.outcome === "Terserap kerja") },
       { id: "wirausaha", achievement: vocation.entrepreneurs, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year), participantDetails: vocation.details.filter((detail) => detail.outcome === "Membuka usaha") },
       { id: "hafiz", achievement: hafidz.total, sourceLabel: hafidz.source.label, sourceUrl: hafidz.source.sheetUrl, dataThrough: "", participantDetails: hafidz.details },
+      ...(health ? [
+        { id: "posyandu" as const, achievement: health.posyandu, sourceLabel: `${health.source.label} · kolom W`, sourceUrl: health.source.sheetUrl, dataThrough: "" },
+        { id: "kader" as const, achievement: health.kader, sourceLabel: `${health.source.label} · kolom X`, sourceUrl: health.source.sheetUrl, dataThrough: "" },
+      ] : []),
       { id: "bank-sampah", achievement: environment.bankSampah.length, sourceLabel: environment.source.label, sourceUrl: environment.source.sheetUrl, dataThrough: environment.dataThrough, details: environment.bankSampah },
       { id: "mangrove", achievement: environment.mangrove.length, sourceLabel: environment.source.label, sourceUrl: environment.source.sheetUrl, dataThrough: environment.dataThrough, details: environment.mangrove },
       { id: "masjid", achievement: masjidBerdaya.total, sourceLabel: masjidBerdaya.source.label, sourceUrl: masjidBerdaya.source.sheetUrl, dataThrough: masjidBerdaya.dataThrough, details: masjidBerdaya.details },
@@ -217,6 +261,7 @@ export async function getProgramImpactData(forceRefresh = false): Promise<Progra
     quality: {
       vocation: { rowsRead: vocation.rowsRead, rowsAccepted: vocation.rowsAccepted, rowsRejected: vocation.rowsRejected },
       hafidz: { rowsRead: hafidz.rowsRead, rowsAccepted: hafidz.rowsAccepted, rowsRejected: hafidz.rowsRejected },
+      health: health ? { rowsRead: health.rowsRead, rowsAccepted: health.rowsAccepted, invalidCells: health.invalidCells, isValid: true } : { rowsRead: 0, rowsAccepted: 0, invalidCells: 0, isValid: false },
       environment: { rowsRead: environment.rowsRead, bankSampahMatched: environment.bankSampah.length, mangroveMatched: environment.mangrove.length, isValid: environment.bankSampah.length > 0 || environment.mangrove.length > 0 },
       masjidBerdaya: { rowsRead: masjidBerdaya.rowsRead, rowsMatched: masjidBerdaya.total, isValid: masjidBerdaya.total > 0 },
       ppTerbina: { rowsRead: ppTerbina.quality.rowsRead, rowsAccepted: ppTerbina.quality.rowsAccepted, rowsRejected: ppTerbina.quality.rowsRejected, isValid: ppTerbina.quality.isValid },

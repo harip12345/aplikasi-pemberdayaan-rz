@@ -1,4 +1,4 @@
-export type AiDataSourceId = "dashboard" | "participants" | "participant-analysis" | "participant-analysis-program-monthly" | "participant-analysis-division-monthly" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact";
+export type AiDataSourceId = "dashboard" | "participants" | "participant-analysis" | "participant-analysis-program-monthly" | "participant-analysis-division-monthly" | "distribution" | "munfik" | "muzzaki" | "mualaf" | "pp-terbina" | "bummas" | "garis-kemiskinan" | "garis-kemiskinan-recap" | "vokasi-impact" | "hafidz-impact" | "environment-impact" | "health-impact";
 
 export type DataSourceDefinition = {
   id: AiDataSourceId;
@@ -117,6 +117,10 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
   "environment-impact": {
     id: "environment-impact", label: "Data Dampak Program Lingkungan", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "1424522729",
     environment: { spreadsheetId: "GOOGLE_SHEETS_ENVIRONMENT_IMPACT_ID", gid: "GOOGLE_SHEETS_ENVIRONMENT_IMPACT_GID" }, parser: "environment-impact-columns-u-v-v1", grain: "Satu baris lokasi Bank Sampah atau dampak Desa Lestari", refreshMode: "cached-google-sheet",
+  },
+  "health-impact": {
+    id: "health-impact", label: "Resume Dampak Program Kesehatan", spreadsheetId: "1sc6zAqxX-ZogtAbwm7eLD1NHcAOQCiT2LHt1TdxqPAU", gid: "529116641",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_HEALTH_IMPACT_ID", gid: "GOOGLE_SHEETS_HEALTH_IMPACT_GID" }, parser: "health-impact-resume-columns-w-x-v1", grain: "Resume, kolom W jumlah Posyandu dan X jumlah Kader", refreshMode: "cached-google-sheet",
   },
 };
 
