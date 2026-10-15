@@ -1,5 +1,6 @@
 import { resolvedDataSource, type AiDataSourceId } from "@/lib/data-catalog";
 import { fetchGoogleSheetCsv } from "@/lib/google-sheets-fetch";
+import { parseGkDivisionSheet } from "@/lib/gk-sheet";
 
 const DETAIL_SOURCES = {
   muzzaki: [{
@@ -30,22 +31,6 @@ const DETAIL_SOURCES = {
     gid: "1421837017",
     columns: ["Nama BUMMas/Unit Bisnis", "Nama Desa", "Kecamatan", "Kota/Kab", "Propinsi", "Cabang", "Bidang Usaha/Program", "Rincian Jenis Usaha", "Jumlah Anggota", "BUMMas", "Status BUMMas"],
   }],
-  "garis-kemiskinan": [
-    {
-      sourceId: "garis-kemiskinan",
-      title: "Data Peserta Keluar Garis Kemiskinan",
-      spreadsheetId: "1ABjGkFo5tOuG7fbFhpec-vMdpOlAz9qeucWjXq90mMo",
-      gid: "409940401",
-      columns: ["Bulan", "Cabang", "Nama PP Sesuai KTP", "Nama Desa", "Kecamatan", "Kab/Kota", "Provinsi", "Sebelum", "Standar GK", "After", "Peningkatan", "Nama Program", "Jenis Usaha", "Produk Usaha"],
-    },
-    {
-      sourceId: "garis-kemiskinan-recap",
-      title: "Rekap Capaian Keluar Garis Kemiskinan",
-      spreadsheetId: "1ABjGkFo5tOuG7fbFhpec-vMdpOlAz9qeucWjXq90mMo",
-      gid: "218055831",
-      columns: ["Bulan 2", "Bulan", "Capaian GK 2025", "Capaian GK 2026", "Target Satu Tahun", "Persentase", "Sisa Target Akumulasi", "Sisa Target Bulan Berjalan"],
-    },
-  ],
 } as const;
 
 export type MetricDetailDataset = { title: string; columns: string[]; rows: string[][]; totalRows: number };
@@ -183,6 +168,12 @@ async function getMunfikDetailData(): Promise<MetricDetailData> {
 
 export async function getMetricDetailData(metricId: string): Promise<MetricDetailData> {
   if (metricId === "munfik") return getMunfikDetailData();
+  if (metricId === "garis-kemiskinan") {
+    const { spreadsheetId, gid } = resolvedDataSource("garis-kemiskinan");
+    const csv = await fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`);
+    const { detail, recap } = parseGkDivisionSheet(csv);
+    return { metricId, datasets: [detail, recap], updatedAt: new Date().toISOString(), source: "Google Sheets" };
+  }
   const sources = DETAIL_SOURCES[metricId as keyof typeof DETAIL_SOURCES];
   if (!sources) throw new Error("Sumber detail untuk indikator ini belum dikonfigurasi.");
   return { metricId, datasets: await Promise.all(sources.map((source) => readSource(source))), updatedAt: new Date().toISOString(), source: "Google Sheets" };

@@ -84,7 +84,7 @@ const DETAIL_NORMALIZATION = {
   mualaf: { sourceId: "mualaf", datasetIndex: 0, monthColumn: "Bulan Informasi", requiredColumn: "Nama PM" },
   "pp-terbina": { sourceId: "pp-terbina", datasetIndex: 0, monthColumn: "Bulan Awal Program", requiredColumn: "Nama PP" },
   bummas: { sourceId: "bummas", datasetIndex: 0, monthColumn: null, requiredColumn: "Bidang Usaha/Program" },
-  "garis-kemiskinan": { sourceId: "garis-kemiskinan", datasetIndex: 0, monthColumn: "Bulan", requiredColumn: "Nama PP Sesuai KTP" },
+  "garis-kemiskinan": { sourceId: "garis-kemiskinan", datasetIndex: 0, monthColumn: "Bulan", requiredColumn: "Bulan" },
   "garis-kemiskinan-recap": { sourceId: "garis-kemiskinan-recap", datasetIndex: 1, monthColumn: "Bulan", requiredColumn: "Bulan" },
 } as const;
 

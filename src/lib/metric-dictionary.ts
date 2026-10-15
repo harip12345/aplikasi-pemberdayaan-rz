@@ -71,7 +71,7 @@ export const METRIC_DICTIONARY: readonly MetricDefinition[] = [
     aliases: ["gk", "keluar gk", "keluar garis kemiskinan", "mustahik keluar kemiskinan"],
     dimensions: ["bulan", "cabang", "desa", "kecamatan", "kota/kab", "provinsi", "program", "jenis usaha", "produk usaha"],
     formula: "Capaian resmi = SUM capaian bulanan Dashboard/rekap. Detail peserta = COUNT baris valid. Growth = (capaian tahun ini - tahun lalu) / tahun lalu × 100%.",
-    searchHints: ["capaian gk", "growth gk", "gk per program", "keluar kemiskinan per provinsi"], notes: "Rekap multitahun berada pada sheet garis-kemiskinan-recap.",
+    searchHints: ["capaian gk", "gk per divisi", "gk per program", "keluar kemiskinan per provinsi"], notes: "Data GK berasal dari empat blok divisi pada sheet PM GK; rekap bulanan dijumlahkan dari blok yang sama.",
   },
   {
     id: "pp-terbina", label: "Peserta Program Terbina", source: "pp-terbina", summarySource: "dashboard",

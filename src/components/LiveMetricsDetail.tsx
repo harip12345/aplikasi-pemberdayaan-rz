@@ -24,7 +24,7 @@ function mergeSummary(metric: Metric, sheetData: DashboardSheetData | null) {
 }
 
 function fetchMetricData(metricId: string, forceRefresh = false) {
-  const detailCacheVersion = "production-v3";
+  const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v4" : "production-v3";
   return Promise.all([
     fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", forceRefresh),
     fetchCachedJson<MetricDetailData>(`metric-detail-${metricId}-${detailCacheVersion}`, `/api/metric-details/${metricId}`, forceRefresh),
@@ -44,7 +44,7 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
     : { href: "/", label: "Dashboard" };
   const fallback = metrics.find((metric) => metric.id === metricId)!;
   const cachedSheetData = getCachedJsonSnapshot<DashboardSheetData>("dashboard-sheet-production-v2");
-  const cachedDetail = getCachedJsonSnapshot<MetricDetailData>(`metric-detail-${metricId}-production-v3`);
+  const cachedDetail = getCachedJsonSnapshot<MetricDetailData>(`metric-detail-${metricId}-${metricId === "garis-kemiskinan" ? "production-v4" : "production-v3"}`);
   const [sheetData, setSheetData] = useState<DashboardSheetData | null>(cachedSheetData);
   const [detail, setDetail] = useState<MetricDetailData | null>(cachedDetail);
   const [query, setQuery] = useState("");
@@ -89,7 +89,7 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
 
     {metricId !== "garis-kemiskinan" && <div className="grid gap-4 sm:grid-cols-3"><SummaryBox icon={Target} label="Target" value={metric.target} unit={metric.unit} isDataAvailable={isSummaryAvailable} /><SummaryBox icon={TrendingUp} label="Capaian" value={metric.achievement} unit={metric.unit} isDataAvailable={isSummaryAvailable} highlight /><div className="rounded-[24px] border bg-white p-5 shadow-soft" style={{ borderColor: percentTone.trackColor }}><p className="text-sm font-medium text-slate-500">Persentase</p><p className="mt-2 min-h-9 text-3xl font-bold" style={{ color: percentTone.color }}>{isSummaryAvailable ? `${percent}%` : ""}</p><div className="mt-3 h-3 rounded-full" style={{ backgroundColor: percentTone.trackColor }}><div className="h-3 rounded-full" style={{ width: `${isSummaryAvailable ? Math.min(percent, 100) : 0}%`, backgroundColor: percentTone.color }} /></div><p className="mt-2 text-xs font-semibold" style={{ color: percentTone.color }}>{isSummaryAvailable ? percentTone.label : ""}</p></div></div>}
 
-    {metricId === "garis-kemiskinan" && gkImpactDataset && <GkImpactVisualization dataset={gkImpactDataset} year={year} />}
+    {metricId === "garis-kemiskinan" && gkImpactDataset && <GkImpactVisualization dataset={gkImpactDataset} year={year} target={metric.target} />}
     {detail && ["muzzaki", "munfik", "mualaf", "pp-terbina", "bummas"].includes(metricId) && <MetricDataInsights metricId={metricId} detail={detail} />}
 
     <div className="sticky top-20 z-40 rounded-[26px] border border-slate-200/80 bg-white/95 p-5 shadow-soft backdrop-blur-xl"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2 text-[#D84315]"><Database size={17} /><p className="text-xs font-semibold uppercase tracking-wider">Data Detail Google Sheets</p></div><p className="mt-1 text-xs text-slate-500">Kolom identitas sensitif tidak ditampilkan.</p></div><label className="relative block sm:w-80"><Search size={16} className="absolute left-3 top-3 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari data detail" className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-orange-300" /></label></div></div>

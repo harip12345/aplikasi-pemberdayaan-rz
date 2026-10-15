@@ -233,7 +233,7 @@ const DETAIL_FIELD_COLUMNS: Record<DetailGroup, readonly string[]> = {
   gender: ["Jenis Kelamin"],
   asnaf: ["Asnaf"],
   village: ["Nama Desa", "Desa"],
-  source: ["Sumber"],
+  source: ["Sumber", "Divisi"],
 };
 
 function detailColumn(values: Record<string, string>, field: DetailGroup) {

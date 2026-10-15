@@ -99,12 +99,12 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
     environment: { spreadsheetId: "GOOGLE_SHEETS_BUMMAS_ID", gid: "GOOGLE_SHEETS_BUMMAS_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris unit usaha dengan bidang usaha/program terisi", refreshMode: "cached-google-sheet",
   },
   "garis-kemiskinan": {
-    id: "garis-kemiskinan", label: "Data Peserta Keluar Garis Kemiskinan", spreadsheetId: "1ABjGkFo5tOuG7fbFhpec-vMdpOlAz9qeucWjXq90mMo", gid: "409940401",
-    environment: { spreadsheetId: "GOOGLE_SHEETS_GK_ID", gid: "GOOGLE_SHEETS_GK_GID" }, parser: "metric-detail-row-v1", grain: "Satu baris peserta keluar garis kemiskinan", refreshMode: "cached-google-sheet",
+    id: "garis-kemiskinan", label: "Data Peserta Keluar Garis Kemiskinan", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "967242088",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_GK_PM_2026_ID", gid: "GOOGLE_SHEETS_GK_PM_2026_GID" }, parser: "gk-four-division-blocks-v1", grain: "Satu baris GK per divisi dan bulan; empat blok horizontal digabung", refreshMode: "cached-google-sheet",
   },
   "garis-kemiskinan-recap": {
-    id: "garis-kemiskinan-recap", label: "Rekap Capaian Keluar Garis Kemiskinan", spreadsheetId: "1ABjGkFo5tOuG7fbFhpec-vMdpOlAz9qeucWjXq90mMo", gid: "218055831",
-    environment: { spreadsheetId: "GOOGLE_SHEETS_GK_RECAP_ID", gid: "GOOGLE_SHEETS_GK_RECAP_GID" }, parser: "gk-multiyear-recap-v1", grain: "Satu baris rekap per bulan", refreshMode: "cached-google-sheet",
+    id: "garis-kemiskinan-recap", label: "Rekap Capaian Keluar Garis Kemiskinan", spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs", gid: "967242088",
+    environment: { spreadsheetId: "GOOGLE_SHEETS_GK_PM_2026_ID", gid: "GOOGLE_SHEETS_GK_PM_2026_GID" }, parser: "gk-four-division-recap-v1", grain: "Satu baris total GK per bulan dari empat divisi", refreshMode: "cached-google-sheet",
   },
   "vokasi-impact": {
     id: "vokasi-impact", label: "Data Dampak Program Vokasi", spreadsheetId: "11w7dbnTtErIf0mhp9KSR5h5aC80FYV5tu11geVm951U", gid: "1561251771",
