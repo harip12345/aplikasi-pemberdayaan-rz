@@ -197,43 +197,87 @@ function PendingIndicatorCard({ indicator, color, softColor, detailHref }: { ind
   return detailHref ? <Link href={detailHref} className={className}>{content}</Link> : <div className={className}>{content}</div>;
 }
 
-function ProgramInsightCard({ program, indicators }: { program: ProgramDefinition; indicators: ResolvedIndicator[] }) {
-  const value = (id: string) => indicators.find((indicator) => indicator.id === id)?.achievement ?? null;
-  const work = value("terserap-kerja");
-  const business = value("wirausaha");
-  const posyandu = value("posyandu");
-  const kader = value("kader");
-  const bankSampah = value("bank-sampah");
-  const mangrove = value("mangrove");
-  const masjid = value("masjid");
-  const participants = value("pp-terbina");
-  const hasEvidence = indicators.some((indicator) => indicator.achievement !== null);
-  const story = program.id === "pendidikan" ? {
-    title: "Keterampilan yang membuka jalan penghidupan",
-    fact: work !== null ? `${formatNumber(work)} peserta vokasi tercatat terserap kerja${business !== null ? `, sementara ${formatNumber(business)} peserta tercatat berwirausaha` : ""}.` : "Hasil penempatan kerja peserta vokasi belum tersedia.",
-    meaning: "Di sinilah nilai pendidikan terasa di luar ruang belajar: keterampilan peserta mulai terhubung dengan kesempatan bekerja dan membangun usaha. Hasil ini dapat menjadi pijakan menuju penghasilan yang lebih mandiri.",
-    next: "Status pekerjaan sebelum program dan keberlanjutan kerja belum tercatat, sehingga penurunan pengangguran belum dapat dihitung langsung.",
-  } : program.id === "kesehatan" ? {
-    title: "Layanan kesehatan yang tumbuh dekat keluarga",
-    fact: posyandu !== null ? `${formatNumber(posyandu)} Posyandu binaan tercatat${kader !== null ? `, didukung oleh ${formatNumber(kader)} kader penggerak utama` : ""}.` : kader !== null ? `${formatNumber(kader)} kader penggerak utama tercatat dalam pembinaan.` : "Capaian pembinaan Posyandu dan kader belum tersedia.",
-    meaning: "Posyandu dan kader adalah simpul layanan di tingkat komunitas. Penguatan keduanya memberi keluarga lebih banyak dukungan untuk pemantauan kesehatan anak dan tindak lanjut yang lebih dekat dengan keseharian mereka.",
-    next: "Capaian anak keluar dari risiko stunting belum tersedia; perubahan status gizi tidak disimpulkan dari jumlah Posyandu atau kader saja.",
-  } : program.id === "lingkungan" ? {
-    title: "Warga punya lebih banyak ruang merawat lingkungan",
-    fact: bankSampah !== null ? `${formatNumber(bankSampah)} titik Bank Sampah tercatat${mangrove !== null ? `, bersama ${formatNumber(mangrove)} titik Desa Lestari Mangrove` : ""}.` : mangrove !== null ? `${formatNumber(mangrove)} titik Desa Lestari Mangrove tercatat.` : "Capaian titik program lingkungan belum tersedia.",
-    meaning: "Titik-titik ini menunjukkan tempat aksi bersama dapat berlangsung: sampah dikelola lebih dekat dengan warga, sementara inisiatif mangrove memberi ruang untuk merawat ekosistem pesisir.",
-    next: "Volume sampah yang terkelola dan hasil pemulihan mangrove belum diukur oleh indikator ini.",
-  } : {
-    title: "Masjid sebagai simpul kehidupan komunitas",
-    fact: masjid !== null ? `${formatNumber(masjid)} titik Masjid Berdaya tercatat${participants !== null ? `. Secara terpisah, ${formatNumber(participants)} peserta program tercatat terbina` : ""}.` : participants !== null ? `${formatNumber(participants)} peserta program tercatat terbina.` : "Capaian Masjid Berdaya dan peserta terbina belum tersedia.",
-    meaning: "Kehadiran Masjid Berdaya menyediakan ruang untuk pembinaan dan perjumpaan warga. Nilainya bukan hanya pada bangunan, melainkan pada peluang menghadirkan aktivitas yang menguatkan hubungan dan kapasitas masyarakat.",
-    next: "Jumlah titik masjid dan peserta terbina berasal dari indikator berbeda; keduanya tidak berarti seluruh peserta dibina di masjid yang sama.",
+function indicatorImpactStory(indicator: ResolvedIndicator) {
+  const amount = formatNumber(indicator.achievement ?? 0);
+  const stories: Record<string, { result: string; impact: string; caveat?: string }> = {
+    "vokasi-keahlian": {
+      result: `${amount} peserta program vokasi tercatat memiliki keahlian.`,
+      impact: "Keahlian adalah bekal untuk memasuki dunia kerja atau membangun usaha; pembelajaran mulai menjadi modal yang dapat dipakai di luar kelas.",
+      caveat: "Angka ini dicatat manual; pemanfaatan keahlian tiap peserta belum ditelusuri.",
+    },
+    "terserap-kerja": {
+      result: `${amount} peserta vokasi tercatat terserap kerja.`,
+      impact: "Ini menunjukkan jalur nyata dari pelatihan menuju kesempatan bekerja dan potensi penghasilan yang lebih mandiri.",
+      caveat: "Status kerja sebelum program dan ketahanan pekerjaan belum tersedia, sehingga penurunan pengangguran belum dapat dihitung.",
+    },
+    wirausaha: {
+      result: `${amount} peserta vokasi tercatat berwirausaha.`,
+      impact: "Keterampilan juga menemukan jalan melalui usaha sendiri: peserta memiliki peluang menciptakan sumber penghidupan, bukan hanya mencari pekerjaan.",
+      caveat: "Pendapatan dan keberlanjutan usaha belum diukur.",
+    },
+    hafiz: {
+      result: `${amount} peserta tercatat mencapai hafiz 30 juz.`,
+      impact: "Capaian ini mencerminkan proses belajar dan ketekunan yang kuat, sekaligus memperkaya kapasitas peserta untuk berkontribusi dalam pembinaan keagamaan.",
+    },
+    stunting: {
+      result: `${amount} anak tercatat keluar dari risiko stunting.`,
+      impact: "Perubahan status anak merupakan hasil yang langsung menyentuh kesehatan keluarga dan memberi dasar yang lebih baik bagi tumbuh kembangnya.",
+    },
+    posyandu: {
+      result: `${amount} Posyandu tercatat dibina.`,
+      impact: "Titik layanan yang lebih kuat memberi keluarga tempat yang lebih dekat untuk memantau kesehatan ibu dan anak serta mencari tindak lanjut sejak dini.",
+      caveat: "Jumlah Posyandu tidak dengan sendirinya membuktikan perbaikan status gizi.",
+    },
+    kader: {
+      result: `${amount} kader penggerak utama tercatat dibina.`,
+      impact: "Kader adalah penghubung layanan dengan kehidupan sehari-hari warga; penguatan mereka dapat membantu informasi dan pendampingan kesehatan menjangkau keluarga.",
+      caveat: "Frekuensi layanan dan perubahan kesehatan keluarga belum tercermin dalam jumlah kader.",
+    },
+    "bank-sampah": {
+      result: `${amount} titik Bank Sampah tercatat dalam program.`,
+      impact: "Setiap titik memberi warga ruang bersama untuk memilah dan mengelola sampah lebih dekat dari rumah, sekaligus menumbuhkan kebiasaan lingkungan yang lebih baik.",
+      caveat: "Volume sampah yang berhasil dikelola belum tersedia.",
+    },
+    mangrove: {
+      result: `${amount} titik Desa Lestari Mangrove tercatat.`,
+      impact: "Inisiatif ini menghadirkan ruang bagi warga untuk merawat ekosistem pesisir dan membangun kepedulian terhadap ketahanan lingkungan setempat.",
+      caveat: "Luas pemulihan dan tingkat hidup mangrove belum diukur.",
+    },
+    tps3r: {
+      result: `${amount} titik TPS3R tercatat.`,
+      impact: "Titik pengolahan berbasis kawasan dapat mendekatkan upaya pengurangan dan pemanfaatan kembali sampah kepada komunitas.",
+      caveat: "Kapasitas dan volume pengolahan belum tersedia.",
+    },
+    masjid: {
+      result: `${amount} titik Masjid Berdaya tercatat.`,
+      impact: "Masjid berpotensi menjadi lebih dari tempat ibadah: ia dapat menjadi simpul pembinaan, perjumpaan, dan kegiatan yang menguatkan kehidupan komunitas.",
+      caveat: "Jumlah titik belum mengukur intensitas kegiatan atau perubahan kondisi warga.",
+    },
+    "pp-terbina": {
+      result: `${amount} peserta program tercatat terbina.`,
+      impact: "Jangkauan pembinaan ini menunjukkan banyaknya orang yang telah disentuh proses pendampingan, sebuah pijakan untuk membangun kapasitas dan keterlibatan sosial.",
+      caveat: "Angka peserta tidak berarti seluruhnya dibina di Masjid Berdaya; hasil lanjutan pembinaan perlu ditelusuri tersendiri.",
+    },
   };
-  return <article className="flex flex-col rounded-[24px] p-6 text-white shadow-lg" style={{ background: `linear-gradient(145deg, #172334, ${program.color})` }}>
-    <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65">Narasi dampak {program.name.replace("Program ", "")}</p><h3 className="mt-2 text-xl font-bold leading-7">{story.title}</h3></div><span className="rounded-2xl bg-white/10 p-3"><program.icon size={22} /></span></div>
-    <div className="mt-5 rounded-2xl border border-white/15 bg-white/10 p-5"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Hasil yang tercatat</p><p className="mt-2 text-lg font-semibold leading-7 text-white">{story.fact}</p></div>
-    <p className="mt-5 text-sm leading-7 text-white/85">{hasEvidence ? story.meaning : "Narasi dampak akan mengikuti capaian yang terverifikasi setelah sumber data tersedia."}</p>
-    {hasEvidence && <p className="mt-5 border-t border-white/15 pt-4 text-xs leading-5 text-white/60"><span className="font-semibold text-white/80">Yang belum terukur:</span> {story.next}</p>}
+  return stories[indicator.id] ?? {
+    result: `${amount} ${indicator.unit} tercatat pada indikator ${indicator.label}.`,
+    impact: "Capaian ini menunjukkan jangkauan hasil program yang sudah tercatat; perubahan lanjutan perlu diperiksa pada sumber yang lebih rinci.",
+  };
+}
+
+function ProgramInsightCard({ program, indicators }: { program: ProgramDefinition; indicators: ResolvedIndicator[] }) {
+  const achieved = indicators.filter((indicator) => indicator.achievement !== null);
+  return <article className="rounded-[24px] p-5 text-white shadow-lg sm:p-6" style={{ background: `linear-gradient(145deg, #172334, ${program.color})` }}>
+    <div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">Narasi dampak {program.name.replace("Program ", "")}</p><h3 className="mt-2 text-lg font-bold leading-6">Cerita di balik setiap capaian</h3></div><span className="rounded-2xl bg-white/10 p-2.5"><program.icon size={20} /></span></div>
+    <div className="mt-4 space-y-2.5">{achieved.map((indicator, index) => {
+      const story = indicatorImpactStory(indicator);
+      return <section key={indicator.id} className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3.5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/60">{String(index + 1).padStart(2, "0")} · {indicator.label}</p>
+        <p className="mt-1.5 text-[13px] font-semibold leading-5 text-white">{story.result}</p>
+        <p className="mt-1.5 text-xs leading-5 text-white/85">{(indicator.achievement ?? 0) > 0 ? story.impact : "Belum ada hasil positif yang tercatat pada indikator ini; narasi dampak akan mengikuti pembaruan sumber data."}</p>
+        {story.caveat && (indicator.achievement ?? 0) > 0 && <p className="mt-1.5 text-[11px] leading-4 text-white/60">Batas data: {story.caveat}</p>}
+      </section>;
+    })}</div>
   </article>;
 }
 
