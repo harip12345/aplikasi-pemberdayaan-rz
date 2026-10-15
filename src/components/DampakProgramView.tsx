@@ -109,14 +109,6 @@ export function DampakProgramView({ indicatorId, initialProgram }: { indicatorId
   const periodLabel = sheetData ? `${months[0]} - ${months[sheetData.latestMonthIndex]} ${year}` : `Tahun ${year}`;
   const connectedIndicators = activeIndicators.filter((indicator) => indicator.achievement !== null);
   const connectedChartData = connectedIndicators.map((indicator) => ({ name: indicator.id === "terserap-kerja" ? "Terserap Kerja" : indicator.id === "wirausaha" ? "Berwirausaha" : indicator.id === "hafiz" ? "Hafidz 30 Juz" : indicator.id === "pp-terbina" ? "PP Terbina" : indicator.label, target: indicator.target ?? 0, capaian: indicator.achievement ?? 0 }));
-  const masjidIndicator = activeIndicators.find((indicator) => indicator.id === "masjid");
-  const masjidDetails = masjidIndicator?.details ?? [];
-  const masjidCoverage = {
-    provinces: new Set(masjidDetails.map((detail) => detail.province).filter((value) => value !== "-")).size,
-    regencies: new Set(masjidDetails.map((detail) => `${detail.province}::${detail.regency}`).filter((value) => !value.endsWith("::-"))).size,
-    branches: new Set(masjidDetails.map((detail) => detail.branch).filter((value) => value !== "-")).size,
-    active: masjidDetails.filter((detail) => detail.status?.toLocaleLowerCase("id-ID") === "aktif").length,
-  };
 
   const detailIndicator = indicatorId ? activeIndicators.find((indicator) => indicator.id === indicatorId) : undefined;
   if (detailIndicator) return <section className="space-y-6">
@@ -156,7 +148,7 @@ export function DampakProgramView({ indicatorId, initialProgram }: { indicatorId
             : <PendingIndicatorCard key={indicator.id} indicator={indicator} color={activeProgram.color} softColor={activeProgram.softColor} detailHref={`/dampak-program/indikator/${indicator.id}`} />)}</div>
           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             {activeProgramId === "dakwah" || activeProgramId === "kesehatan" ? <DakwahProgressPanel indicators={connectedIndicators} isLoading={isLoading} color={activeProgram.color} /> : <EconomicImpactChart data={connectedChartData} isLoading={isLoading} color={activeProgram.color} title={`Target dan capaian dampak ${activeProgram.name.replace("Program ", "").toLowerCase()}`} />}
-            <ProgramInsightCard program={activeProgram} indicators={activeIndicators} masjidCoverage={activeProgramId === "dakwah" ? masjidCoverage : undefined} masjidCount={activeProgramId === "dakwah" ? masjidDetails.length : 0} />
+            <ProgramInsightCard program={activeProgram} indicators={activeIndicators} />
           </div>
         </div> : <div className="space-y-5">
           <div className={`grid gap-4 sm:grid-cols-2 ${activeProgramId === "kesehatan" ? "xl:grid-cols-3" : ""}`}>{activeIndicators.map((indicator) => <PendingIndicatorCard key={indicator.id} indicator={indicator} color={activeProgram.color} softColor={activeProgram.softColor} detailHref={`/dampak-program/indikator/${indicator.id}`} />)}</div>
@@ -205,26 +197,44 @@ function PendingIndicatorCard({ indicator, color, softColor, detailHref }: { ind
   return detailHref ? <Link href={detailHref} className={className}>{content}</Link> : <div className={className}>{content}</div>;
 }
 
-function ProgramInsightCard({ program, indicators, masjidCoverage, masjidCount }: { program: ProgramDefinition; indicators: ResolvedIndicator[]; masjidCoverage?: { provinces: number; regencies: number; branches: number; active: number }; masjidCount: number }) {
-  const measured = indicators.filter((indicator) => indicator.achievement !== null && indicator.target !== null && indicator.target > 0 && indicator.percentage !== null);
-  const ranked = [...measured].sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0));
-  const strongest = ranked[0];
-  const furthest = ranked[ranked.length - 1];
-  const reached = measured.filter((indicator) => (indicator.percentage ?? 0) >= 100).length;
-  const missing = indicators.filter((indicator) => indicator.achievement === null).length;
-  const headline = reached > 0 ? `${reached} indikator mencapai target` : "Capaian masih perlu dikejar";
-  return <div className="flex flex-col rounded-[24px] p-6 text-white shadow-lg" style={{ background: `linear-gradient(145deg, #172334, ${program.color})` }}>
-    <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65">Insight {program.name.replace("Program ", "")}</p><h3 className="mt-2 text-xl font-bold">{headline}</h3></div><span className="rounded-2xl bg-white/10 p-3"><program.icon size={22} /></span></div>
-    <p className="mt-4 text-sm leading-7 text-white/80">{measured.length > 0 ? `${reached} dari ${measured.length} indikator yang dapat dibandingkan sudah mencapai targetnya. Setiap persentase dihitung terhadap target indikator masing-masing; satuan yang berbeda tidak dijumlahkan.` : "Target dan capaian belum cukup untuk membandingkan kinerja antarindikator."}</p>
-    {strongest && <div className="mt-5 rounded-2xl border border-white/15 bg-white/10 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Capaian relatif tertinggi</p><p className="mt-1 text-sm font-semibold">{strongest.label}</p><p className="mt-1 text-xs leading-5 text-white/70"><strong className="text-white">{strongest.percentage}%</strong> dari target · {formatNumber(strongest.achievement ?? 0)} dari {formatNumber(strongest.target ?? 0)} {strongest.unit}</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-white" style={{ width: `${Math.min(strongest.percentage ?? 0, 100)}%` }} /></div></div>}
-    {furthest && furthest.id !== strongest?.id && (furthest.percentage ?? 0) < 100 && <p className="mt-4 text-sm leading-6 text-white/80"><strong className="text-white">Perlu dikejar:</strong> {furthest.label} baru {furthest.percentage}% dari target; selisihnya {formatNumber(Math.max(0, (furthest.target ?? 0) - (furthest.achievement ?? 0)))} {furthest.unit}. Ini celah relatif terbesar di antara indikator yang terukur.</p>}
-    {masjidCoverage && masjidCount > 0 && <><p className="mt-4 text-sm leading-6 text-white/80"><strong className="text-white">Jangkauan Masjid Berdaya:</strong> {formatNumber(masjidCount)} titik tersebar di {masjidCoverage.provinces} provinsi dan {masjidCoverage.regencies} kota/kabupaten. {masjidCoverage.active} lokasi berstatus aktif ({Math.round(masjidCoverage.active / masjidCount * 100)}% dari titik tercatat).</p><div className="mt-4 grid grid-cols-2 gap-2.5"><DakwahCoverageStat value={masjidCoverage.provinces} label="Provinsi" /><DakwahCoverageStat value={masjidCoverage.regencies} label="Kota/Kab" /><DakwahCoverageStat value={masjidCoverage.branches} label="Kantor/Cabang" /><DakwahCoverageStat value={masjidCoverage.active} label="Desa aktif" /></div><Link href="/dampak-program/indikator/masjid" className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#173B2A] transition hover:bg-emerald-50"><Search size={16} /> Telusuri Masjid Berdaya</Link></>}
-    {missing > 0 && <p className="mt-5 border-t border-white/15 pt-4 text-xs leading-5 text-white/60">{missing} indikator belum memiliki capaian terverifikasi dan tidak disertakan dalam perbandingan.</p>}
-  </div>;
-}
-
-function DakwahCoverageStat({ value, label }: { value: number; label: string }) {
-  return <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-3"><p className="text-xl font-bold text-white">{formatNumber(value)}</p><p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-100/65">{label}</p></div>;
+function ProgramInsightCard({ program, indicators }: { program: ProgramDefinition; indicators: ResolvedIndicator[] }) {
+  const value = (id: string) => indicators.find((indicator) => indicator.id === id)?.achievement ?? null;
+  const work = value("terserap-kerja");
+  const business = value("wirausaha");
+  const posyandu = value("posyandu");
+  const kader = value("kader");
+  const bankSampah = value("bank-sampah");
+  const mangrove = value("mangrove");
+  const masjid = value("masjid");
+  const participants = value("pp-terbina");
+  const hasEvidence = indicators.some((indicator) => indicator.achievement !== null);
+  const story = program.id === "pendidikan" ? {
+    title: "Keterampilan yang membuka jalan penghidupan",
+    fact: work !== null ? `${formatNumber(work)} peserta vokasi tercatat terserap kerja${business !== null ? `, sementara ${formatNumber(business)} peserta tercatat berwirausaha` : ""}.` : "Hasil penempatan kerja peserta vokasi belum tersedia.",
+    meaning: "Di sinilah nilai pendidikan terasa di luar ruang belajar: keterampilan peserta mulai terhubung dengan kesempatan bekerja dan membangun usaha. Hasil ini dapat menjadi pijakan menuju penghasilan yang lebih mandiri.",
+    next: "Status pekerjaan sebelum program dan keberlanjutan kerja belum tercatat, sehingga penurunan pengangguran belum dapat dihitung langsung.",
+  } : program.id === "kesehatan" ? {
+    title: "Layanan kesehatan yang tumbuh dekat keluarga",
+    fact: posyandu !== null ? `${formatNumber(posyandu)} Posyandu binaan tercatat${kader !== null ? `, didukung oleh ${formatNumber(kader)} kader penggerak utama` : ""}.` : kader !== null ? `${formatNumber(kader)} kader penggerak utama tercatat dalam pembinaan.` : "Capaian pembinaan Posyandu dan kader belum tersedia.",
+    meaning: "Posyandu dan kader adalah simpul layanan di tingkat komunitas. Penguatan keduanya memberi keluarga lebih banyak dukungan untuk pemantauan kesehatan anak dan tindak lanjut yang lebih dekat dengan keseharian mereka.",
+    next: "Capaian anak keluar dari risiko stunting belum tersedia; perubahan status gizi tidak disimpulkan dari jumlah Posyandu atau kader saja.",
+  } : program.id === "lingkungan" ? {
+    title: "Warga punya lebih banyak ruang merawat lingkungan",
+    fact: bankSampah !== null ? `${formatNumber(bankSampah)} titik Bank Sampah tercatat${mangrove !== null ? `, bersama ${formatNumber(mangrove)} titik Desa Lestari Mangrove` : ""}.` : mangrove !== null ? `${formatNumber(mangrove)} titik Desa Lestari Mangrove tercatat.` : "Capaian titik program lingkungan belum tersedia.",
+    meaning: "Titik-titik ini menunjukkan tempat aksi bersama dapat berlangsung: sampah dikelola lebih dekat dengan warga, sementara inisiatif mangrove memberi ruang untuk merawat ekosistem pesisir.",
+    next: "Volume sampah yang terkelola dan hasil pemulihan mangrove belum diukur oleh indikator ini.",
+  } : {
+    title: "Masjid sebagai simpul kehidupan komunitas",
+    fact: masjid !== null ? `${formatNumber(masjid)} titik Masjid Berdaya tercatat${participants !== null ? `. Secara terpisah, ${formatNumber(participants)} peserta program tercatat terbina` : ""}.` : participants !== null ? `${formatNumber(participants)} peserta program tercatat terbina.` : "Capaian Masjid Berdaya dan peserta terbina belum tersedia.",
+    meaning: "Kehadiran Masjid Berdaya menyediakan ruang untuk pembinaan dan perjumpaan warga. Nilainya bukan hanya pada bangunan, melainkan pada peluang menghadirkan aktivitas yang menguatkan hubungan dan kapasitas masyarakat.",
+    next: "Jumlah titik masjid dan peserta terbina berasal dari indikator berbeda; keduanya tidak berarti seluruh peserta dibina di masjid yang sama.",
+  };
+  return <article className="flex flex-col rounded-[24px] p-6 text-white shadow-lg" style={{ background: `linear-gradient(145deg, #172334, ${program.color})` }}>
+    <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/65">Narasi dampak {program.name.replace("Program ", "")}</p><h3 className="mt-2 text-xl font-bold leading-7">{story.title}</h3></div><span className="rounded-2xl bg-white/10 p-3"><program.icon size={22} /></span></div>
+    <div className="mt-5 rounded-2xl border border-white/15 bg-white/10 p-5"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Hasil yang tercatat</p><p className="mt-2 text-lg font-semibold leading-7 text-white">{story.fact}</p></div>
+    <p className="mt-5 text-sm leading-7 text-white/85">{hasEvidence ? story.meaning : "Narasi dampak akan mengikuti capaian yang terverifikasi setelah sumber data tersedia."}</p>
+    {hasEvidence && <p className="mt-5 border-t border-white/15 pt-4 text-xs leading-5 text-white/60"><span className="font-semibold text-white/80">Yang belum terukur:</span> {story.next}</p>}
+  </article>;
 }
 
 function DakwahProgressPanel({ indicators, isLoading, color }: { indicators: ResolvedIndicator[]; isLoading: boolean; color: string }) {
