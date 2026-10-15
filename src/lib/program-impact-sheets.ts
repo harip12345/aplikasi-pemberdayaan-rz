@@ -23,6 +23,14 @@ export type ProgramImpactParticipantDetail = {
   year?: string;
 };
 
+export type ProgramImpactBreakdown = { name: string; value: number };
+
+export type ProgramImpactAnalysis = {
+  reportingRows: number;
+  byProvince: ProgramImpactBreakdown[];
+  byBranch: ProgramImpactBreakdown[];
+};
+
 export type ProgramImpactIndicator = {
   id: "vokasi-keahlian" | "terserap-kerja" | "wirausaha" | "hafiz" | "posyandu" | "kader" | "bank-sampah" | "mangrove" | "masjid" | "pp-terbina";
   achievement: number;
@@ -31,6 +39,7 @@ export type ProgramImpactIndicator = {
   dataThrough: string;
   details?: ProgramImpactLocationDetail[];
   participantDetails?: ProgramImpactParticipantDetail[];
+  analysis?: ProgramImpactAnalysis;
 };
 
 export type ProgramImpactData = {
@@ -142,17 +151,35 @@ async function loadHealthImpact() {
   let kader = 0;
   let invalidCells = 0;
   let rowsAccepted = 0;
+  const distributions = {
+    posyandu: { reportingRows: 0, province: new Map<string, number>(), branch: new Map<string, number>() },
+    kader: { reportingRows: 0, province: new Map<string, number>(), branch: new Map<string, number>() },
+  };
+  const addToDistribution = (kind: keyof typeof distributions, row: string[], value: number) => {
+    if (value <= 0) return;
+    const distribution = distributions[kind];
+    distribution.reportingRows += 1;
+    const province = row[6]?.trim() || "Provinsi belum terisi";
+    const branch = row[7]?.trim() || "Cabang belum terisi";
+    distribution.province.set(province, (distribution.province.get(province) ?? 0) + value);
+    distribution.branch.set(branch, (distribution.branch.get(branch) ?? 0) + value);
+  };
   for (const row of rows) {
     const posyanduValue = parseWholeCount(row[posyanduColumn] ?? "");
     const cadreValue = parseWholeCount(row[cadreColumn] ?? "");
     if (posyanduValue === null) invalidCells += 1;
-    else posyandu += posyanduValue;
+    else { posyandu += posyanduValue; addToDistribution("posyandu", row, posyanduValue); }
     if (cadreValue === null) invalidCells += 1;
-    else kader += cadreValue;
+    else { kader += cadreValue; addToDistribution("kader", row, cadreValue); }
     if (posyanduValue !== null || cadreValue !== null) rowsAccepted += 1;
   }
   if (rows.length === 0 || rowsAccepted === 0) throw new Error("Tidak ada baris data bernomor yang dapat dibaca pada Resume dampak kesehatan.");
-  return { posyandu, kader, rowsRead: rows.length, rowsAccepted, invalidCells, source };
+  const toAnalysis = (kind: keyof typeof distributions): ProgramImpactAnalysis => {
+    const distribution = distributions[kind];
+    const sorted = (values: Map<string, number>) => [...values].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "id"));
+    return { reportingRows: distribution.reportingRows, byProvince: sorted(distribution.province), byBranch: sorted(distribution.branch) };
+  };
+  return { posyandu, kader, posyanduAnalysis: toAnalysis("posyandu"), kaderAnalysis: toAnalysis("kader"), rowsRead: rows.length, rowsAccepted, invalidCells, source };
 }
 
 async function loadEnvironmentImpact() {
@@ -250,8 +277,8 @@ export async function getProgramImpactData(forceRefresh = false): Promise<Progra
       { id: "wirausaha", achievement: vocation.entrepreneurs, sourceLabel: vocation.source.label, sourceUrl: vocation.source.sheetUrl, dataThrough: String(vocation.year), participantDetails: vocation.details.filter((detail) => detail.outcome === "Membuka usaha") },
       { id: "hafiz", achievement: hafidz.total, sourceLabel: hafidz.source.label, sourceUrl: hafidz.source.sheetUrl, dataThrough: "", participantDetails: hafidz.details },
       ...(health ? [
-        { id: "posyandu" as const, achievement: health.posyandu, sourceLabel: `${health.source.label} · kolom W`, sourceUrl: health.source.sheetUrl, dataThrough: "" },
-        { id: "kader" as const, achievement: health.kader, sourceLabel: `${health.source.label} · kolom X`, sourceUrl: health.source.sheetUrl, dataThrough: "" },
+        { id: "posyandu" as const, achievement: health.posyandu, sourceLabel: `${health.source.label} · kolom W`, sourceUrl: health.source.sheetUrl, dataThrough: "", analysis: health.posyanduAnalysis },
+        { id: "kader" as const, achievement: health.kader, sourceLabel: `${health.source.label} · kolom X`, sourceUrl: health.source.sheetUrl, dataThrough: "", analysis: health.kaderAnalysis },
       ] : []),
       { id: "bank-sampah", achievement: environment.bankSampah.length, sourceLabel: environment.source.label, sourceUrl: environment.source.sheetUrl, dataThrough: environment.dataThrough, details: environment.bankSampah },
       { id: "mangrove", achievement: environment.mangrove.length, sourceLabel: environment.source.label, sourceUrl: environment.source.sheetUrl, dataThrough: environment.dataThrough, details: environment.mangrove },
