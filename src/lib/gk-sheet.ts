@@ -62,7 +62,8 @@ export function parseGkDivisionSheet(csv: string): { detail: MetricDetailDataset
   };
 
   DIVISIONS.forEach((division, sectionIndex) => {
-    const start = starts[sectionIndex];
+    // The Project month column may sit immediately before its section label.
+    const start = division === "Project" ? Math.max(0, starts[sectionIndex] - 1) : starts[sectionIndex];
     const end = starts[sectionIndex + 1] ?? Math.max(...table.map((row) => row.length));
     const headerRowIndex = division === "Empowerment" ? 1 : 2;
     const header = table[headerRowIndex] ?? [];
