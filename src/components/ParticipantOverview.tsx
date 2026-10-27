@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowUpRight, BarChart3, Download, Eye, EyeOff, FileDown, FileSpreadsheet, Filter, RefreshCw, RotateCcw, Search, TrendingDown, TrendingUp } from "lucide-react";
 import type { SheetData } from "write-excel-file/browser";
-import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { fetchCachedJson, getCachedJsonSnapshot, subscribeCachedJson } from "@/lib/client-data-cache";
 import { ASNAF_FIELDS, type AsnafField, type ParticipantRow, type ParticipantSheetData } from "@/lib/participant-sheets";
 import type { ParticipantAnalysisData } from "@/lib/participant-analysis";
 import { useReportingPeriod } from "@/components/ReportingPeriodContext";
@@ -175,11 +175,12 @@ export function ParticipantOverview() {
 
   useEffect(() => {
     let cancelled = false;
+    const stopUpdates = subscribeCachedJson<ParticipantSheetData>("participants-sheet-v1", "/api/participants", setData);
     fetchCachedJson<ParticipantSheetData>("participants-sheet-v1", "/api/participants")
       .then((nextData) => { if (!cancelled) { setData(nextData); setFilters((current) => ({ ...current, startMonthIndex: 0, endMonthIndex: nextData.latestMonthIndex })); } })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Data Peserta Program tidak dapat dimuat."); })
       .finally(() => { if (!cancelled) { setIsLoading(false); setInitialLoadDone(true); } });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; stopUpdates(); };
   }, []);
 
   useEffect(() => {
@@ -208,10 +209,11 @@ export function ParticipantOverview() {
 
   useEffect(() => {
     let cancelled = false;
+    const stopUpdates = subscribeCachedJson<ParticipantAnalysisData>(ANALYSIS_CACHE_KEY, "/api/participant-analysis", setAnalysis);
     fetchCachedJson<ParticipantAnalysisData>(ANALYSIS_CACHE_KEY, "/api/participant-analysis")
       .then((nextData) => { if (!cancelled) setAnalysis(nextData); })
       .catch(() => undefined);
-    return () => { cancelled = true; };
+    return () => { cancelled = true; stopUpdates(); };
   }, []);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Apple, Baby, BadgeCheck, BookOpen, CalendarDays, Camera, CircleDot, GraduationCap, Hammer, Heart, Landmark, Leaf, Library, MapPin, Newspaper, Phone, Recycle, RefreshCw, Search, Shield, SlidersHorizontal, Store, Users, X, type LucideIcon } from "lucide-react";
 import { ProvinceDistribution, VillageProfile } from "@/data/distribution";
-import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { fetchCachedJson, getCachedJsonSnapshot, subscribeCachedJson } from "@/lib/client-data-cache";
 import { MultiFilterSelect } from "@/components/MultiFilterSelect";
 import { AssistantPageContext } from "@/components/AssistantViewContext";
 import { finishAssistantAction, useAssistantActions } from "@/components/AssistantActionContext";
@@ -84,6 +84,7 @@ export default function PetaSebaranPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const stopUpdates = subscribeCachedJson<DistributionResponse>("distribution-sheet-production-v4", "/api/distribution", setDistribution);
 
     fetchCachedJson<DistributionResponse>("distribution-sheet-production-v4", "/api/distribution")
       .then((payload) => {
@@ -98,6 +99,7 @@ export default function PetaSebaranPage() {
 
     return () => {
       cancelled = true;
+      stopUpdates();
     };
   }, []);
 

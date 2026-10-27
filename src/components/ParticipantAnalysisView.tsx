@@ -7,7 +7,7 @@ import {
   Bar, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart, ReferenceArea,
   ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { fetchCachedJson, getCachedJsonSnapshot, subscribeCachedJson } from "@/lib/client-data-cache";
 import type { AchievementAnalysis, ParticipantAnalysisData, ParticipantMonthlyGroup } from "@/lib/participant-analysis";
 import { AssistantPageContext } from "@/components/AssistantViewContext";
 import { finishAssistantAction, useAssistantActions } from "@/components/AssistantActionContext";
@@ -143,11 +143,12 @@ export function ParticipantAnalysisView() {
 
   useEffect(() => {
     let cancelled = false;
+    const stopUpdates = subscribeCachedJson<ParticipantAnalysisData>(CACHE_KEY, "/api/participant-analysis", setData);
     fetchCachedJson<ParticipantAnalysisData>(CACHE_KEY, "/api/participant-analysis")
       .then((nextData) => { if (!cancelled) { setData(nextData); setEndMonthIndex(nextData.monthly.latestMonthIndex); } })
       .catch((loadError: unknown) => { if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Data analisa tidak dapat dimuat."); })
       .finally(() => { if (!cancelled) { setIsLoading(false); setInitialLoadDone(true); } });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; stopUpdates(); };
   }, []);
 
   useEffect(() => {

@@ -58,7 +58,7 @@ export function parseGkDivisionSheet(csv: string): { detail: MetricDetailDataset
     Empowerment: { month: "Bulan", branch: "Cabang", name: "Nama PP Sesuai KTP", village: "Nama Desa", district: "Kecamatan", city: "Kab/Kota", province: "Provinsi", before: "Sebelum", standard: "Standar GK", after: "After", program: "Nama Program", business: "Jenis Usaha", product: "Produk Usaha" },
     Distribution: { month: "Bulan", branch: "Cabang", name: "Nama PM", before: "Pendapatan Before Intervensi", standard: "Pendapatan Standar GK", after: "Pendapatan Terakhir Pasca Intervensi", program: "Departement" },
     Dakwah: { month: "Bulan", branch: "Cabang", name: "Nama PP Sesuai KTP", village: "Nama Desa", district: "Kecamatan", city: "Kab/Kota", province: "Provinsi", before: "Sebelum", standard: "Standar GK", after: "After", program: "Nama Program", product: "Produk Usaha" },
-    Project: { month: "Bulan", name: "Nama PP Sesuai KTP", village: "Nama Desa", district: "Kecamatan", city: "Kab/Kota", province: "Provinsi", program: "Program Rumah Zakat" },
+    Project: { month: "Bulan", name: "Nama PP Sesuai KTP", village: "Nama Desa", district: "Kecamatan", city: "Kab/Kota", province: "Provinsi", before: "Penghasilan Sebelumnya", standard: "Standar GKM", after: "After", program: "Program Rumah Zakat" },
   };
 
   DIVISIONS.forEach((division, sectionIndex) => {

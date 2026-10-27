@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Database, RefreshCw, Search, Target, TrendingUp } from "lucide-react";
 import { formatNumber, metrics, percentage, type Metric } from "@/data/dashboard";
-import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { fetchCachedJson, getCachedJsonSnapshot, subscribeCachedJson } from "@/lib/client-data-cache";
 import type { DashboardSheetData } from "@/lib/dashboard-sheets";
 import type { MetricDetailData, MetricDetailDataset } from "@/lib/metric-detail-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
@@ -24,7 +24,7 @@ function mergeSummary(metric: Metric, sheetData: DashboardSheetData | null) {
 }
 
 function fetchMetricData(metricId: string, forceRefresh = false) {
-  const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v4" : "production-v3";
+  const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v5" : "production-v3";
   return Promise.all([
     fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", forceRefresh),
     fetchCachedJson<MetricDetailData>(`metric-detail-${metricId}-${detailCacheVersion}`, `/api/metric-details/${metricId}`, forceRefresh),
@@ -44,7 +44,7 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
     : { href: "/", label: "Dashboard" };
   const fallback = metrics.find((metric) => metric.id === metricId)!;
   const cachedSheetData = getCachedJsonSnapshot<DashboardSheetData>("dashboard-sheet-production-v2");
-  const cachedDetail = getCachedJsonSnapshot<MetricDetailData>(`metric-detail-${metricId}-${metricId === "garis-kemiskinan" ? "production-v4" : "production-v3"}`);
+  const cachedDetail = getCachedJsonSnapshot<MetricDetailData>(`metric-detail-${metricId}-${metricId === "garis-kemiskinan" ? "production-v5" : "production-v3"}`);
   const [sheetData, setSheetData] = useState<DashboardSheetData | null>(cachedSheetData);
   const [detail, setDetail] = useState<MetricDetailData | null>(cachedDetail);
   const [query, setQuery] = useState("");
@@ -63,10 +63,13 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v5" : "production-v3";
+    const stopSummaryUpdates = subscribeCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", setSheetData);
+    const stopDetailUpdates = subscribeCachedJson<MetricDetailData>(`metric-detail-${metricId}-${detailCacheVersion}`, `/api/metric-details/${metricId}`, setDetail);
     fetchMetricData(metricId).then(([summary, detailData]) => { if (!cancelled) { setSheetData(summary); setDetail(detailData); } })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Data detail belum dapat dimuat."); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; stopSummaryUpdates(); stopDetailUpdates(); };
   }, [metricId]);
 
   const metric = useMemo(() => mergeSummary(fallback, sheetData), [fallback, sheetData]);

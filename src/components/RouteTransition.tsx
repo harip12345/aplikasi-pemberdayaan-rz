@@ -11,7 +11,7 @@ const routeData = new Map<string, [string, string]>([
   ["/ikhtisar-pp-plp", ["participants-sheet-v1", "/api/participants"]],
   ["/peta-sebaran", ["distribution-sheet-production-v4", "/api/distribution"]],
   ["/bummas", ["metric-detail-bummas-production-v3", "/api/metric-details/bummas"]],
-  ["/garis-kemiskinan", ["metric-detail-garis-kemiskinan-production-v4", "/api/metric-details/garis-kemiskinan"]],
+  ["/garis-kemiskinan", ["metric-detail-garis-kemiskinan-production-v5", "/api/metric-details/garis-kemiskinan"]],
   ["/mualaf", ["metric-detail-mualaf-production-v3", "/api/metric-details/mualaf"]],
   ["/munfik", ["metric-detail-munfik-production-v3", "/api/metric-details/munfik"]],
   ["/muzzaki", ["metric-detail-muzzaki-production-v3", "/api/metric-details/muzzaki"]],

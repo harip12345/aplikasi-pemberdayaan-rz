@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, CalendarDays, MapPinned, RefreshCw } from "lucide-react";
 import { DashboardCard } from "@/components/DashboardCard";
 import { formatNumber, metrics as fallbackMetrics, type Metric } from "@/data/dashboard";
-import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { fetchCachedJson, getCachedJsonSnapshot, subscribeCachedJson } from "@/lib/client-data-cache";
 import type { DashboardSheetData, DashboardSheetMetric } from "@/lib/dashboard-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
 import { useReportingPeriod } from "@/components/ReportingPeriodContext";
@@ -68,6 +68,7 @@ export function DashboardView() {
 
   useEffect(() => {
     let cancelled = false;
+    const stopUpdates = subscribeCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", setSheetData);
 
     fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard")
       .then((data) => {
@@ -85,6 +86,7 @@ export function DashboardView() {
 
     return () => {
       cancelled = true;
+      stopUpdates();
     };
   }, []);
 

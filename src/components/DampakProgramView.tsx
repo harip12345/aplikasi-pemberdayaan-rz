@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, BriefcaseBusiness, Building2, Database, ExternalLink, GraduationCap, HeartPulse, Landmark, Leaf, MapPin, MoonStar, RefreshCw, Search, Target, UserRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { formatNumber } from "@/data/dashboard";
-import { fetchCachedJson, getCachedJsonSnapshot } from "@/lib/client-data-cache";
+import { fetchCachedJson, getCachedJsonSnapshot, subscribeCachedJson } from "@/lib/client-data-cache";
 import type { DashboardSheetData, DashboardSheetMetric } from "@/lib/dashboard-sheets";
 import type { ProgramImpactAnalysis, ProgramImpactBreakdown, ProgramImpactData, ProgramImpactLocationDetail, ProgramImpactParticipantDetail } from "@/lib/program-impact-sheets";
 import { achievementTone } from "@/lib/achievement-tone";
@@ -75,6 +75,8 @@ export function DampakProgramView({ indicatorId, initialProgram }: { indicatorId
   };
   useEffect(() => {
     let cancelled = false;
+    const stopDashboardUpdates = subscribeCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", setSheetData);
+    const stopImpactUpdates = subscribeCachedJson<ProgramImpactData>("program-impact-production-v6", "/api/program-impact", setProgramImpact);
     Promise.all([
       fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard"),
       fetchCachedJson<ProgramImpactData>("program-impact-production-v6", "/api/program-impact"),
@@ -82,7 +84,7 @@ export function DampakProgramView({ indicatorId, initialProgram }: { indicatorId
       .then(([dashboard, impact]) => { if (!cancelled) { setSheetData(dashboard); setProgramImpact(impact); } })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Data dampak belum dapat dimuat."); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; stopDashboardUpdates(); stopImpactUpdates(); };
   }, []);
 
   const routeProgram = indicatorId ? programs.find((program) => program.indicators.some((indicator) => indicator.id === indicatorId)) : undefined;
@@ -146,10 +148,13 @@ export function DampakProgramView({ indicatorId, initialProgram }: { indicatorId
           <div className={`grid gap-4 sm:grid-cols-2 ${activeProgramId === "dakwah" ? "xl:grid-cols-2" : activeProgramId === "lingkungan" || activeProgramId === "kesehatan" ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>{activeIndicators.map((indicator) => indicator.achievement !== null
             ? <ImpactMetricCard key={indicator.id} indicator={indicator} months={months} color={activeProgram.color} isLoading={isLoading} detailHref={indicator.href ? `${indicator.href}?from=dampak-program&program=${activeProgram.id}` : `/dampak-program/indikator/${indicator.id}`} />
             : <PendingIndicatorCard key={indicator.id} indicator={indicator} color={activeProgram.color} softColor={activeProgram.softColor} detailHref={`/dampak-program/indikator/${indicator.id}`} />)}</div>
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          {activeProgramId === "pendidikan" ? <div className="space-y-5">
+            <EducationProgressPanel indicators={connectedIndicators} isLoading={isLoading} color={activeProgram.color} />
+            <ProgramInsightCard program={activeProgram} indicators={activeIndicators} layout="grid" />
+          </div> : <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             {activeProgramId === "dakwah" || activeProgramId === "kesehatan" ? <DakwahProgressPanel indicators={connectedIndicators} isLoading={isLoading} color={activeProgram.color} /> : <EconomicImpactChart data={connectedChartData} isLoading={isLoading} color={activeProgram.color} title={`Target dan capaian dampak ${activeProgram.name.replace("Program ", "").toLowerCase()}`} />}
             <ProgramInsightCard program={activeProgram} indicators={activeIndicators} />
-          </div>
+          </div>}
         </div> : <div className="space-y-5">
           <div className={`grid gap-4 sm:grid-cols-2 ${activeProgramId === "kesehatan" ? "xl:grid-cols-3" : ""}`}>{activeIndicators.map((indicator) => <PendingIndicatorCard key={indicator.id} indicator={indicator} color={activeProgram.color} softColor={activeProgram.softColor} detailHref={`/dampak-program/indikator/${indicator.id}`} />)}</div>
           <div className="rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-5 py-5"><div className="flex items-start gap-3"><span className="rounded-xl bg-white p-2 text-slate-400"><Database size={18} /></span><div><p className="text-sm font-semibold text-slate-700">Capaian belum tersedia pada pratinjau ini</p><p className="mt-1 text-xs leading-5 text-slate-500">{activeProgram.outcome} Grafik dan analisis akan mengikuti data yang dapat dibaca aplikasi.</p></div></div></div>
@@ -265,11 +270,11 @@ function indicatorImpactStory(indicator: ResolvedIndicator) {
   };
 }
 
-function ProgramInsightCard({ program, indicators }: { program: ProgramDefinition; indicators: ResolvedIndicator[] }) {
+function ProgramInsightCard({ program, indicators, layout = "stack" }: { program: ProgramDefinition; indicators: ResolvedIndicator[]; layout?: "stack" | "grid" }) {
   const achieved = indicators.filter((indicator) => indicator.achievement !== null);
   return <article className="rounded-[24px] p-5 text-white shadow-lg sm:p-6" style={{ background: `linear-gradient(145deg, #172334, ${program.color})` }}>
     <div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">Narasi dampak {program.name.replace("Program ", "")}</p><h3 className="mt-2 text-lg font-bold leading-6">Cerita di balik setiap capaian</h3></div><span className="rounded-2xl bg-white/10 p-2.5"><program.icon size={20} /></span></div>
-    <div className="mt-4 space-y-2.5">{achieved.map((indicator, index) => {
+    <div className={layout === "grid" ? "mt-4 grid gap-3 md:grid-cols-2" : "mt-4 space-y-2.5"}>{achieved.map((indicator, index) => {
       const story = indicatorImpactStory(indicator);
       return <section key={indicator.id} className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3.5">
         <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/60">{String(index + 1).padStart(2, "0")} · {indicator.label}</p>
@@ -279,6 +284,19 @@ function ProgramInsightCard({ program, indicators }: { program: ProgramDefinitio
       </section>;
     })}</div>
   </article>;
+}
+
+function EducationProgressPanel({ indicators, isLoading, color }: { indicators: ResolvedIndicator[]; isLoading: boolean; color: string }) {
+  const maxPercent = Math.max(120, Math.ceil(Math.max(...indicators.map((indicator) => indicator.percentage ?? 0), 0) / 20) * 20);
+  const targetPosition = 100 / maxPercent * 100;
+  return <section className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color }}>Perbandingan indikator</p><h3 className="mt-1 text-xl font-bold text-ink">Seberapa jauh setiap hasil dari target?</h3><p className="mt-1 text-xs leading-5 text-slate-500">Panjang bar menunjukkan persentase capaian terhadap target masing-masing indikator.</p></div><span className="inline-flex items-center gap-2 text-[11px] font-semibold text-slate-500"><span className="h-4 border-l-2 border-dashed border-slate-600" /> Garis target 100%</span></div>
+    <div className="mt-5 grid gap-3 md:grid-cols-2">{indicators.map((indicator) => {
+      const percent = indicator.percentage ?? 0;
+      const tone = achievementTone(percent);
+      return <div key={indicator.id} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-bold leading-5 text-ink">{indicator.label}</p><p className="mt-1 text-xs text-slate-500">{isLoading ? "Memuat capaian" : `${formatNumber(indicator.achievement ?? 0)} dari ${formatNumber(indicator.target ?? 0)} ${indicator.unit}`}</p></div><span className="shrink-0 text-lg font-extrabold tabular-nums" style={{ color: tone.color }}>{isLoading || indicator.percentage === null ? "—" : `${indicator.percentage}%`}</span></div><div className="relative mt-4 h-3 rounded-full bg-slate-100"><div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, percent / maxPercent * 100)}%`, backgroundColor: tone.color }} /><span className="absolute top-[-4px] h-5 border-l-2 border-dashed border-slate-600" style={{ left: `${targetPosition}%` }} aria-hidden="true" /></div></div>;
+    })}</div><p className="mt-4 text-[11px] leading-5 text-slate-500">Indikator tidak dijumlahkan: peserta antarhasil vokasi bisa beririsan, sedangkan capaian hafiz mengukur hasil yang berbeda.</p>
+  </section>;
 }
 
 function DakwahProgressPanel({ indicators, isLoading, color }: { indicators: ResolvedIndicator[]; isLoading: boolean; color: string }) {
@@ -367,17 +385,62 @@ function PendingDetailPage({ indicator, color }: { indicator: ResolvedIndicator;
   return <div className="space-y-6"><DetailHeader indicator={indicator} color={color} category="Analisis indikator" description="Ringkasan capaian dan status ketersediaan data rinci." /><ImpactAnalyticsPanel indicator={indicator} color={color} /><p className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-sm text-slate-600">{indicator.achievement === null ? "Belum ada capaian terverifikasi untuk indikator ini. Grafik rinci akan tampil setelah sumber data tersedia." : "Sumber saat ini menyediakan total capaian, tetapi belum menyediakan rincian waktu atau wilayah untuk grafik tambahan."}</p><DetailSource indicator={indicator} color={color} /></div>;
 }
 
+function VocationOutcomeAnalytics({ indicator, color }: { indicator: ResolvedIndicator; color: string }) {
+  const achievement = indicator.achievement ?? 0;
+  const target = indicator.target ?? 0;
+  const percentage = target > 0 ? achievement / target * 100 : 0;
+  const scale = Math.max(120, Math.ceil(percentage / 20) * 20);
+  const difference = achievement - target;
+  const isEmployed = indicator.id === "terserap-kerja";
+  const story = indicatorImpactStory(indicator);
+
+  return <div className="space-y-4">
+    <div className="grid gap-3 sm:grid-cols-3">
+      <InsightStat label="Peserta dengan hasil tercatat" value={formatNumber(achievement)} suffix={isEmployed ? "terserap kerja" : "berwirausaha"} color={color} />
+      <InsightStat label="Target indikator" value={formatNumber(target)} suffix="peserta" />
+      <InsightStat label={difference >= 0 ? "Melampaui target" : "Menuju target"} value={difference >= 0 ? `+${formatNumber(difference)}` : formatNumber(Math.abs(difference))} suffix={difference >= 0 ? "peserta di atas target" : "peserta lagi diperlukan"} color={difference >= 0 ? "#059669" : color} />
+    </div>
+    <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color }}>Visual capaian</p>
+        <h2 className="mt-1 text-xl font-bold text-ink">Hasil terhadap target</h2>
+        <p className="mt-1 text-sm text-slate-500">{formatNumber(achievement)} dari {formatNumber(target)} peserta · {Math.round(percentage)}% target tercapai</p>
+        <div className="mt-7 rounded-2xl bg-slate-50 px-4 py-6 sm:px-6">
+          <div className="flex items-end justify-between gap-4"><span className="text-xs font-semibold text-slate-500">Capaian tercatat</span><strong className="text-2xl tabular-nums" style={{ color }}>{Math.round(percentage)}%</strong></div>
+          <div className="relative mt-4 h-5 rounded-full bg-slate-200" role="img" aria-label={`Capaian ${formatNumber(achievement)} dari target ${formatNumber(target)} peserta, ${Math.round(percentage)} persen`}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, percentage / scale * 100)}%`, backgroundColor: color }} />
+            <span className="absolute -top-2 h-9 border-l-2 border-dashed border-slate-600" style={{ left: `${100 / scale * 100}%` }} aria-hidden="true" />
+          </div>
+          <div className="mt-4 flex items-start justify-between gap-3 text-[11px] text-slate-500"><span>0%</span><span className="font-semibold text-slate-700">Garis putus-putus = target 100%</span><span>{scale}%</span></div>
+        </div>
+        <p className="mt-4 text-xs leading-5 text-slate-500">{difference >= 0 ? `Capaian sudah melampaui target sebanyak ${formatNumber(difference)} peserta.` : `Masih diperlukan ${formatNumber(Math.abs(difference))} peserta untuk mencapai target.`} Persentase dihitung dari jumlah peserta dengan hasil tercatat dibanding target indikator.</p>
+      </section>
+      <section className="rounded-[24px] bg-[#172334] p-5 text-white shadow-sm sm:p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300">Makna dampak</p>
+        <h2 className="mt-2 text-xl font-bold">{isEmployed ? "Keahlian membuka jalan menuju kerja" : "Keahlian menjadi jalan membangun usaha"}</h2>
+        <p className="mt-4 text-sm font-semibold leading-6 text-white">{story.result}</p>
+        <p className="mt-2 text-sm leading-6 text-white/75">{story.impact}</p>
+        {story.caveat && <p className="mt-5 border-t border-white/15 pt-4 text-xs leading-5 text-white/55">Batas data: {story.caveat}</p>}
+      </section>
+    </div>
+  </div>;
+}
+
 function EducationDetailPage({ indicator, color, query, onQueryChange }: { indicator: ResolvedIndicator; color: string; query: string; onQueryChange: (value: string) => void }) {
   const participants = indicator.participantDetails ?? [];
+  const isVocationOutcome = indicator.id === "terserap-kerja" || indicator.id === "wirausaha";
   const normalizedQuery = query.trim().toLocaleLowerCase("id-ID");
-  const filtered = participants.filter((participant) => !normalizedQuery || [participant.name, participant.outcome, participant.year ?? ""].some((value) => value.toLocaleLowerCase("id-ID").includes(normalizedQuery)));
+  const filtered = participants.filter((participant) => !normalizedQuery || [participant.name, participant.outcome].some((value) => value.toLocaleLowerCase("id-ID").includes(normalizedQuery)));
 
   return <div className="space-y-6">
     <DetailHeader indicator={indicator} color={color} category="Analisis dampak pendidikan" description={indicator.participantDetails ? `${formatNumber(participants.length)} rincian peserta tersedia untuk ditelusuri.` : "Capaian dicatat manual; daftar peserta dan sumber rinci belum tersedia."} />
-    <ImpactAnalyticsPanel indicator={indicator} color={color} />
+    {isVocationOutcome ? <VocationOutcomeAnalytics indicator={indicator} color={color} /> : <ImpactAnalyticsPanel indicator={indicator} color={color} />}
     <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-soft sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>Data rinci</p><h2 className="mt-1 text-xl font-bold text-ink">Rincian peserta</h2><p className="mt-1 text-xs text-slate-500">Menampilkan {formatNumber(filtered.length)} dari {formatNumber(participants.length)} peserta</p></div>{participants.length > 0 && <label className="relative block w-full sm:w-80"><span className="sr-only">Cari peserta pendidikan</span><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Cari nama, hasil, atau tahun" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none focus:border-amber-500" /></label>}</div>
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map((participant, index) => <div key={participant.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Peserta {String(index + 1).padStart(2, "0")}</p><h3 className="mt-1 font-bold text-ink">{participant.name}</h3><p className="mt-1 text-xs text-slate-500">{participant.outcome}</p></div>{participant.year && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{participant.year}</span>}</div>)}{filtered.length === 0 && <p className="col-span-full rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">{!indicator.participantDetails ? "Capaian tersedia sebagai input manual, tetapi belum ada daftar peserta atau sumber rinci untuk ditelusuri." : "Peserta tidak ditemukan untuk pencarian ini."}</p>}</div>
+      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>Data rinci</p><h2 className="mt-1 text-xl font-bold text-ink">Daftar peserta dalam satu tampilan</h2><p className="mt-1 text-xs text-slate-500">Menampilkan {formatNumber(filtered.length)} dari {formatNumber(participants.length)} peserta; tidak dikelompokkan menurut tahun.</p></div>{participants.length > 0 && <label className="relative block w-full sm:w-80"><span className="sr-only">Cari peserta pendidikan</span><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Cari nama peserta" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none focus:border-amber-500" /></label>}</div>
+      <div className="mt-5 max-h-[520px] overflow-auto rounded-2xl border border-slate-200">
+        <table className="w-full min-w-[460px] border-collapse text-left text-sm"><thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th scope="col" className="w-20 px-4 py-3">No.</th><th scope="col" className="px-4 py-3">Nama peserta</th><th scope="col" className="px-4 py-3">Hasil tercatat</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map((participant, index) => <tr key={participant.id} className="odd:bg-white even:bg-slate-50/70 hover:bg-amber-50/60"><td className="px-4 py-3 tabular-nums text-slate-400">{index + 1}</td><td className="px-4 py-3 font-semibold text-ink">{participant.name}</td><td className="px-4 py-3 text-slate-600">{participant.outcome}</td></tr>)}</tbody></table>
+        {filtered.length === 0 && <p className="px-5 py-8 text-center text-sm text-slate-500">{!indicator.participantDetails ? "Capaian tersedia sebagai input manual, tetapi belum ada daftar peserta atau sumber rinci untuk ditelusuri." : "Peserta tidak ditemukan untuk pencarian ini."}</p>}
+      </div>
     </div>
     <DetailSource indicator={indicator} color={color} />
   </div>;
@@ -390,6 +453,8 @@ function LocationDetailPage({ indicator, color, query, onQueryChange }: { indica
   const regencies = new Set(details.map((detail) => `${detail.province}::${detail.regency}`).filter((value) => !value.endsWith("::-"))).size;
   const isDakwah = indicator.id === "masjid";
 
+  if (indicator.id === "bank-sampah" || isDakwah) return <UnifiedLocationImpactPage indicator={indicator} color={color} query={query} onQueryChange={onQueryChange} details={details} filteredDetails={filteredDetails} provinces={provinces} regencies={regencies} />;
+
   return <div className="space-y-6">
     <DetailHeader indicator={indicator} color={color} category={`Analisis dampak ${isDakwah ? "dakwah" : "lingkungan"}`} description={`${formatNumber(details.length)} titik di ${provinces} provinsi dan ${regencies} kota/kabupaten.`} />
     <ImpactAnalyticsPanel indicator={indicator} color={color} />
@@ -399,4 +464,64 @@ function LocationDetailPage({ indicator, color, query, onQueryChange }: { indica
     </div>
     <DetailSource indicator={indicator} color={color} />
   </div>;
+}
+
+function UnifiedLocationImpactPage({ indicator, color, query, onQueryChange, details, filteredDetails, provinces, regencies }: {
+  indicator: ResolvedIndicator;
+  color: string;
+  query: string;
+  onQueryChange: (value: string) => void;
+  details: ProgramImpactLocationDetail[];
+  filteredDetails: ProgramImpactLocationDetail[];
+  provinces: number;
+  regencies: number;
+}) {
+  const isMasjid = indicator.id === "masjid";
+  const achievement = indicator.achievement ?? details.length;
+  const target = indicator.target ?? 0;
+  const percentage = target > 0 ? achievement / target * 100 : null;
+  const story = indicatorImpactStory(indicator);
+  const distribution = (indicator.analysis?.byProvince ?? groupImpactDetails(details, "province")).slice(0, 6);
+  const maximum = Math.max(...distribution.map((item) => item.value), 1);
+
+  return <article className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-soft">
+    <header className="px-6 py-7 text-white sm:px-8" style={{ background: `linear-gradient(125deg, #172334, ${color})` }}>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">Analisis dampak {isMasjid ? "dakwah" : "lingkungan"}</p>
+      <h1 className="mt-3 text-3xl font-bold">{indicator.label}</h1>
+      <p className="mt-3 text-sm leading-6 text-white/80">{formatNumber(details.length)} titik tercatat di {provinces} provinsi dan {regencies} kota/kabupaten. Ringkasan capaian, sebaran, dan daftar lokasi ada dalam satu tampilan.</p>
+    </header>
+
+    <div className="divide-y divide-slate-200 px-5 sm:px-7">
+      <section className="grid gap-5 py-6 sm:grid-cols-3" aria-label="Ringkasan capaian">
+        <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Capaian</p><p className="mt-1 text-3xl font-extrabold tabular-nums" style={{ color }}>{formatNumber(achievement)}</p><p className="text-xs text-slate-500">titik program</p></div>
+        <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Target</p><p className="mt-1 text-3xl font-extrabold tabular-nums text-ink">{target > 0 ? formatNumber(target) : "—"}</p><p className="text-xs text-slate-500">titik program</p></div>
+        <div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Realisasi target</p><p className="mt-1 text-3xl font-extrabold tabular-nums" style={{ color }}>{percentage === null ? "—" : `${Math.round(percentage)}%`}</p><p className="text-xs text-slate-500">{percentage === null ? "Target belum tersedia" : achievement >= target ? `${formatNumber(achievement - target)} titik di atas target` : `${formatNumber(target - achievement)} titik menuju target`}</p></div>
+      </section>
+
+      <section className="grid gap-8 py-7 lg:grid-cols-[1fr_0.9fr]" aria-label="Sebaran dan makna dampak">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color }}>Sebaran titik program</p>
+          <h2 className="mt-1 text-lg font-bold text-ink">Provinsi dengan titik terbanyak</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Menampilkan hingga enam provinsi. Ini komposisi lokasi tercatat, bukan peringkat kualitas dampak.</p>
+          <div className="mt-5 space-y-3.5">{distribution.map((item) => <div key={item.name}>
+            <div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="min-w-0 truncate font-semibold text-slate-700" title={item.name}>{item.name}</span><span className="shrink-0 tabular-nums text-slate-500">{formatNumber(item.value)} titik</span></div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${item.value / maximum * 100}%`, backgroundColor: color }} /></div>
+          </div>)}{distribution.length === 0 && <p className="text-sm text-slate-500">Sebaran provinsi belum tersedia.</p>}</div>
+        </div>
+        <div className="lg:border-l lg:border-slate-200 lg:pl-8">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color }}>Cerita dampak</p>
+          <h2 className="mt-1 text-lg font-bold text-ink">{isMasjid ? "Masjid sebagai simpul komunitas" : "Pengelolaan sampah makin dekat dengan warga"}</h2>
+          <p className="mt-4 text-sm font-semibold leading-6 text-ink">{story.result}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{story.impact}</p>
+          {story.caveat && <p className="mt-4 text-xs leading-5 text-slate-500">Batas data: {story.caveat}</p>}
+        </div>
+      </section>
+
+      <section className="py-7" aria-label="Daftar lokasi">
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color }}>Telusuri lokasi</p><h2 className="mt-1 text-lg font-bold text-ink">Daftar titik program</h2><p className="mt-1 text-xs text-slate-500">Menampilkan {formatNumber(filteredDetails.length)} dari {formatNumber(details.length)} lokasi</p></div><label className="relative block w-full sm:w-80"><span className="sr-only">Cari lokasi {indicator.label}</span><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Cari desa, wilayah, atau cabang" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none focus:border-slate-400" /></label></div>
+        <div className="mt-5 max-h-[500px] overflow-auto rounded-xl border border-slate-200"><table className="w-full min-w-[740px] border-collapse text-left text-xs"><thead className="sticky top-0 z-10 bg-slate-100 font-bold uppercase tracking-wide text-slate-500"><tr><th scope="col" className="w-14 px-4 py-3">No.</th><th scope="col" className="px-4 py-3">Desa</th><th scope="col" className="px-4 py-3">Wilayah</th><th scope="col" className="px-4 py-3">Cabang</th>{isMasjid && <th scope="col" className="px-4 py-3">Relawan Inspirasi</th>}<th scope="col" className="px-4 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredDetails.map((detail, index) => <tr key={`${detail.id}-${index}`} className="odd:bg-white even:bg-slate-50/70 hover:bg-slate-100"><td className="px-4 py-3 tabular-nums text-slate-400">{index + 1}</td><td className="px-4 py-3 font-semibold text-ink">{detail.village}</td><td className="px-4 py-3 text-slate-600">{[detail.district, detail.regency, detail.province].filter((value) => value && value !== "-").join(", ") || "—"}</td><td className="px-4 py-3 text-slate-600">{detail.branch || "—"}</td>{isMasjid && <td className="px-4 py-3 text-slate-600">{detail.volunteer || "—"}</td>}<td className="px-4 py-3 text-slate-600">{detail.status || "—"}</td></tr>)}</tbody></table>{filteredDetails.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">Lokasi tidak ditemukan. Coba kata kunci lain.</p>}</div>
+        {indicator.sourceUrl && <a href={indicator.sourceUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 text-xs font-semibold hover:underline" style={{ color }}><ExternalLink size={14} /> Buka sumber: {indicator.sourceLabel}</a>}
+      </section>
+    </div>
+  </article>;
 }

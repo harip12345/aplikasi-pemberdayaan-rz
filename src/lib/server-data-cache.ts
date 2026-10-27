@@ -3,7 +3,7 @@ type ServerCacheEntry<T> = {
   expiresAt: number;
 };
 
-const DEFAULT_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_TTL_MS = 2 * 60 * 1000;
 const serverCache = new Map<string, ServerCacheEntry<unknown>>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
