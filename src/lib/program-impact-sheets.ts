@@ -21,6 +21,12 @@ export type ProgramImpactParticipantDetail = {
   name: string;
   outcome: string;
   year?: string;
+  gender?: string;
+  age?: number;
+  occupation?: string;
+  workplace?: string;
+  village?: string;
+  facilitator?: string;
 };
 
 export type ProgramImpactBreakdown = { name: string; value: number };
@@ -94,16 +100,32 @@ async function loadVocationImpact() {
   const nameColumn = header.findIndex((value) => value === "nama peserta program");
   const outcomeColumn = header.findIndex((value) => value.includes("terserap kerja") && value.includes("membuka usaha"));
   const yearColumn = header.findIndex((value) => value.includes("tahun terserap kerja") && value.includes("tahun membuka usaha"));
+  const genderColumn = header.findIndex((value) => value === "jenis kelamin");
+  const ageColumn = header.findIndex((value) => value === "usia");
+  const occupationColumn = header.findIndex((value) => value.includes("jenis pekerjaan") && value.includes("jenis usaha"));
+  const workplaceColumn = header.findIndex((value) => value.includes("tempat kerja") && value.includes("tempat usaha"));
+  const villageColumn = header.findIndex((value) => value === "desa");
+  const facilitatorColumn = header.findIndex((value) => value === "ri pic" || value === "relawan inspirasi pic");
   if (nameColumn < 0 || outcomeColumn < 0) throw new Error("Kolom Nama Peserta Program atau Terserap Kerja/Membuka Usaha tidak ditemukan.");
   const rows = table.slice(1).filter((row) => row.some(Boolean));
   const validRows = rows.filter((row) => row[nameColumn]?.trim() && ["terserap kerja", "membuka usaha"].includes(normalized(row[outcomeColumn] ?? "")));
   const years = validRows.map((row) => Number(row[yearColumn] ?? 0)).filter((value) => Number.isInteger(value) && value > 2000);
-  const details: ProgramImpactParticipantDetail[] = validRows.map((row, index) => ({
-    id: `vokasi-${index + 1}`,
-    name: row[nameColumn].trim(),
-    outcome: normalized(row[outcomeColumn] ?? "") === "terserap kerja" ? "Terserap kerja" : "Membuka usaha",
-    year: yearColumn >= 0 ? row[yearColumn]?.trim() || undefined : undefined,
-  }));
+  const details: ProgramImpactParticipantDetail[] = validRows.map((row, index) => {
+    const ageText = ageColumn >= 0 ? row[ageColumn]?.trim() : "";
+    const parsedAge = ageText && /^\d{1,3}$/.test(ageText) ? Number(ageText) : null;
+    return {
+      id: `vokasi-${index + 1}`,
+      name: row[nameColumn].trim(),
+      outcome: normalized(row[outcomeColumn] ?? "") === "terserap kerja" ? "Terserap kerja" : "Membuka usaha",
+      year: yearColumn >= 0 ? row[yearColumn]?.trim() || undefined : undefined,
+      gender: genderColumn >= 0 ? row[genderColumn]?.trim() || undefined : undefined,
+      age: parsedAge !== null && parsedAge > 0 && parsedAge <= 110 ? parsedAge : undefined,
+      occupation: occupationColumn >= 0 ? row[occupationColumn]?.trim() || undefined : undefined,
+      workplace: workplaceColumn >= 0 ? row[workplaceColumn]?.trim() || undefined : undefined,
+      village: villageColumn >= 0 ? row[villageColumn]?.trim() || undefined : undefined,
+      facilitator: facilitatorColumn >= 0 ? row[facilitatorColumn]?.trim() || undefined : undefined,
+    };
+  });
   return {
     employed: validRows.filter((row) => normalized(row[outcomeColumn] ?? "") === "terserap kerja").length,
     entrepreneurs: validRows.filter((row) => normalized(row[outcomeColumn] ?? "") === "membuka usaha").length,
@@ -261,7 +283,7 @@ async function loadMasjidBerdayaImpact() {
 
 export async function getProgramImpactData(forceRefresh = false): Promise<ProgramImpactData> {
   const [vocation, hafidz, health, environment, masjidBerdaya, ppTerbina] = await Promise.all([
-    getServerCachedData("impact-vocation-v2", loadVocationImpact, forceRefresh),
+    getServerCachedData("impact-vocation-v3", loadVocationImpact, forceRefresh),
     getServerCachedData("impact-hafidz-v2", loadHafidzImpact, forceRefresh),
     getServerCachedData("impact-health-resume-v1", loadHealthImpact, forceRefresh).catch(() => null),
     getServerCachedData("impact-environment-v1", loadEnvironmentImpact, forceRefresh),

@@ -127,6 +127,14 @@ export async function approvedApiGuard() {
   return null;
 }
 
+// Pratinjau data hanya untuk server development yang diakses melalui loopback.
+// Endpoint yang mengubah data, admin, dan asisten AI tetap memerlukan sesi.
+export function isLocalDataPreviewRequest(request: Request) {
+  if (process.env.NODE_ENV !== "development") return false;
+  const hostname = new URL(request.url).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 export async function getCurrentAdminSession() {
   const session = await getCurrentSession();
   if (!session || session.profile.status !== "approved") return null;
