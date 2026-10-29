@@ -16,6 +16,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { createFirebaseBrowserAuth } from "@/lib/firebase/client";
+import { writeUserMenuProfile, type UserMenuProfile } from "@/lib/user-menu-cache";
 
 type Mode = "sign-in" | "sign-up";
 const INTERNAL_EMAIL_DOMAIN = "rumahzakat.org";
@@ -54,8 +55,9 @@ async function establishSession(idToken: string) {
   });
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) throw new Error("Layanan login server belum tersedia. Silakan coba kembali setelah deployment selesai.");
-  const payload = await response.json() as { message?: string; status?: string };
+  const payload = await response.json() as { message?: string; status?: string; user?: UserMenuProfile };
   if (!response.ok) throw new Error(payload.message || "Sesi login tidak dapat dibuat.");
+  if (payload.status === "approved" && payload.user) writeUserMenuProfile(payload.user);
   return payload.status;
 }
 

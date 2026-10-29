@@ -96,6 +96,13 @@ function headerColumn(header: string[], name: string, start: number, end: number
   return useLast ? matches.at(-1) ?? -1 : matches[0] ?? -1;
 }
 
+function parseCount(value: string) {
+  const normalized = value.trim().replace(/[.\s]/g, "").replace(/,/g, "");
+  if (!/^\d+$/.test(normalized)) return 0;
+  const count = Number(normalized);
+  return Number.isSafeInteger(count) ? count : 0;
+}
+
 async function getMunfikDetailData(): Promise<MetricDetailData> {
   const { spreadsheetId, gid } = resolvedDataSource("munfik");
   const csv = await fetchGoogleSheetCsv(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`);
@@ -126,13 +133,14 @@ async function getMunfikDetailData(): Promise<MetricDetailData> {
   const dakwahEnd = Math.max(...table.map((row) => row.length - 1));
   const dakwah = {
     start: 51, end: dakwahEnd, dataStart: 2, source: "Dakwah",
-    month: headerColumn(sideHeader, "Bulan", 51, dakwahEnd, true),
+    month: headerColumn(sideHeader, "Bulan", 51, dakwahEnd),
     name: headerColumn(sideHeader, "Nama PP Sesuai KTP", 51, dakwahEnd),
     office: headerColumn(sideHeader, "Nama RI", 51, dakwahEnd),
     city: headerColumn(sideHeader, "Kab/Kota", 51, dakwahEnd),
     province: headerColumn(sideHeader, "Provinsi", 51, dakwahEnd),
     program: headerColumn(sideHeader, "Program Rumah Zakat", 51, dakwahEnd),
     nominal: -1,
+    achievement: headerColumn(sideHeader, "Capaian", 51, dakwahEnd),
   };
   const blocks = [green, progdis, dakwah];
   if (blocks.some((block) => block.month < 0)) throw new Error("Kolom bulan pada salah satu format Munfik tidak ditemukan.");
@@ -143,11 +151,20 @@ async function getMunfikDetailData(): Promise<MetricDetailData> {
     table.slice(block.dataStart).forEach((row, rowIndex) => {
       const monthIndex = normalizeMonth(row[block.month] ?? "");
       if (monthIndex < 0) return;
+      // Dakwah kini berupa rekap bulanan. Capaian adalah jumlah Munfik;
+      // kolom BNBA berbeda makna dan baris Total tidak boleh dihitung ulang.
+      if (block.source === "Dakwah" && dakwah.achievement >= 0) {
+        const amount = parseCount(row[dakwah.achievement] ?? "");
+        if (amount <= 0) return;
+        counts[monthIndex].Dakwah += amount;
+        normalized.push({ monthIndex, values: [String(block.dataStart + rowIndex + 1), MONTHS[monthIndex], "Dakwah", "", "", "", "", "", "", String(amount)] });
+        return;
+      }
       const name = block.name >= 0 ? row[block.name] ?? "" : "";
       const program = block.program >= 0 ? row[block.program] ?? "" : "";
       if (!name && !program) return;
       counts[monthIndex][block.source as keyof typeof counts[number]] += 1;
-      normalized.push({ monthIndex, values: [String(block.dataStart + rowIndex + 1), MONTHS[monthIndex], block.source, name, block.office >= 0 ? row[block.office] ?? "" : "", block.city >= 0 ? row[block.city] ?? "" : "", block.province >= 0 ? row[block.province] ?? "" : "", program, block.nominal >= 0 ? row[block.nominal] ?? "" : ""] });
+      normalized.push({ monthIndex, values: [String(block.dataStart + rowIndex + 1), MONTHS[monthIndex], block.source, name, block.office >= 0 ? row[block.office] ?? "" : "", block.city >= 0 ? row[block.city] ?? "" : "", block.province >= 0 ? row[block.province] ?? "" : "", program, block.nominal >= 0 ? row[block.nominal] ?? "" : "", "1"] });
     });
   });
   normalized.sort((a, b) => a.monthIndex - b.monthIndex || a.values[1].localeCompare(b.values[1], "id") || a.values[2].localeCompare(b.values[2], "id"));
@@ -160,7 +177,7 @@ async function getMunfikDetailData(): Promise<MetricDetailData> {
     metricId: "munfik",
     datasets: [
       { title: "Rekap Munfik per Bulan dan Sumber", columns: ["Bulan", "Empowerment", "Progdis", "Dakwah", "Total"], rows: summaryRows, totalRows: summaryRows.length },
-      { title: "Data Munfik Ternormalisasi", columns: ["Baris Sumber", "Bulan", "Sumber", "Nama", "Cabang/Kantor", "Kab/Kota", "Provinsi", "Program", "Nominal"], rows: normalized.map((item) => item.values), totalRows: normalized.length },
+      { title: "Data Munfik Ternormalisasi", columns: ["Baris Sumber", "Bulan", "Sumber", "Nama", "Cabang/Kantor", "Kab/Kota", "Provinsi", "Program", "Nominal", "Jumlah"], rows: normalized.map((item) => item.values), totalRows: normalized.length },
     ],
     updatedAt: new Date().toISOString(), source: "Google Sheets",
   };

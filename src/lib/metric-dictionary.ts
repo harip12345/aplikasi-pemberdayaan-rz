@@ -62,7 +62,7 @@ export const METRIC_DICTIONARY: readonly MetricDefinition[] = [
     description: "Peserta yang menjadi munfik dari blok Empowerment, Progdis, atau Dakwah.", unit: "orang", aggregation: "count_valid_rows", periodBehavior: "flow",
     aliases: ["munfik", "munfiq", "orang berinfak", "menjadi munfik"],
     dimensions: ["bulan", "sumber", "cabang/kantor", "kota/kab", "provinsi", "program"],
-    formula: "COUNT seluruh baris valid setelah tiga blok horizontal dinormalisasi; bukan nama unik dan bukan SUM nominal.",
+    formula: "COUNT baris valid Empowerment dan Progdis, ditambah SUM Capaian bulanan Dakwah; bukan BNBA, baris Total, nama unik, atau SUM nominal.",
     searchHints: ["munfik per sumber", "munfik empowerment", "munfik sampai juli"], notes: "Ejaan keluaran diseragamkan menjadi Munfik.",
   },
   {

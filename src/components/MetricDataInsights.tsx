@@ -164,17 +164,22 @@ function buildInsight(metricId: string, detail: MetricDetailData): Insight | nul
     const progdisIndex = column(summary, "Progdis");
     const dakwahIndex = column(summary, "Dakwah");
     const monthlyData = summary.rows.filter((row) => !clean(row[monthIndex] ?? "").toLowerCase().includes("grand")).map((row) => ({ month: clean(row[monthIndex] ?? ""), empowerment: parseNumber(row[empowermentIndex] ?? ""), progdis: parseNumber(row[progdisIndex] ?? ""), dakwah: parseNumber(row[dakwahIndex] ?? "") })).filter((row) => row.empowerment + row.progdis + row.dakwah > 0);
-    const sources = countBy(normalized, "Sumber", 5);
+    const sources = [
+      { name: "Empowerment", value: monthlyData.reduce((sum, row) => sum + row.empowerment, 0) },
+      { name: "Progdis", value: monthlyData.reduce((sum, row) => sum + row.progdis, 0) },
+      { name: "Dakwah", value: monthlyData.reduce((sum, row) => sum + row.dakwah, 0) },
+    ].filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
     const programs = countBy(normalized, "Program", 5);
+    const total = sources.reduce((sum, item) => sum + item.value, 0);
     return {
       eyebrow: "Partisipasi dan sumber kontribusi",
       title: "Profil Kontribusi Munfik",
-      narrative: `Data Munfik telah dinormalisasi dari beberapa format horizontal menjadi ${formatNumber(normalized.totalRows)} baris. Grafik bulanan memisahkan kontribusi Empowerment, Progdis, dan Dakwah agar pola pertumbuhan setiap sumber dapat dibandingkan secara langsung.`,
+      narrative: `Sebanyak ${formatNumber(total)} Munfik tercatat dari Empowerment, Progdis, dan Dakwah. Empowerment dan Progdis berasal dari rincian peserta; Dakwah berasal dari kolom Capaian pada rekap bulanan, sehingga tidak tersedia rincian nama peserta untuk bagian tersebut.`,
       stats: [
-        { label: "Total data Munfik", value: formatNumber(normalized.totalRows), note: "seluruh sumber" },
+        { label: "Total Munfik", value: formatNumber(total), note: "seluruh sumber" },
         { label: "Sumber data aktif", value: formatNumber(sources.length), note: sources.map((item) => item.name).join(", ") },
         { label: "Bulan tercatat", value: formatNumber(monthlyData.length), note: "periode dengan data" },
-        { label: "Program dominan", value: programs[0]?.name ?? "—", note: programs[0] ? `${formatNumber(programs[0].value)} data` : "belum tersedia" },
+        { label: "Program dominan", value: programs[0]?.name ?? "—", note: programs[0] ? `${formatNumber(programs[0].value)} data dari sumber rinci` : "belum tersedia" },
       ],
       monthlyData,
       monthlySeries: [

@@ -13,7 +13,7 @@ const routeData = new Map<string, [string, string]>([
   ["/bummas", ["metric-detail-bummas-production-v3", "/api/metric-details/bummas"]],
   ["/garis-kemiskinan", ["metric-detail-garis-kemiskinan-production-v5", "/api/metric-details/garis-kemiskinan"]],
   ["/mualaf", ["metric-detail-mualaf-production-v3", "/api/metric-details/mualaf"]],
-  ["/munfik", ["metric-detail-munfik-production-v3", "/api/metric-details/munfik"]],
+  ["/munfik", ["metric-detail-munfik-production-v4", "/api/metric-details/munfik"]],
   ["/muzzaki", ["metric-detail-muzzaki-production-v3", "/api/metric-details/muzzaki"]],
   ["/pp-terbina", ["metric-detail-pp-terbina-production-v3", "/api/metric-details/pp-terbina"]],
 ]);

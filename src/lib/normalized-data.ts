@@ -41,6 +41,7 @@ export type NormalizedMunfikRecord = {
   province: string;
   program: string;
   nominal: number | null;
+  count: number;
 };
 
 export type NormalizedDetailRecord = {

@@ -6,6 +6,7 @@ import {
   isSameOriginRequest,
 } from "@/lib/firebase/auth-server";
 import { firebaseAdminAuth, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { isAdminEmail } from "@/lib/auth-config";
 
 export async function POST(request: Request) {
   if (!isFirebaseAdminConfigured()) return NextResponse.json({ message: "Firebase belum dikonfigurasi." }, { status: 503 });
@@ -19,7 +20,12 @@ export async function POST(request: Request) {
     if (!token.email_verified) return NextResponse.json({ message: "Verifikasi email Anda sebelum masuk." }, { status: 403 });
     const profile = await ensureProfile(token);
     const sessionCookie = await firebaseAdminAuth().createSessionCookie(body.idToken, { expiresIn: FIREBASE_SESSION_MAX_AGE_SECONDS * 1000 });
-    const response = NextResponse.json({ ok: true, status: profile.status });
+    const response = NextResponse.json({ ok: true, status: profile.status, user: {
+      email: profile.email,
+      fullName: profile.full_name || token.name || profile.email.split("@")[0],
+      avatarUrl: profile.avatar_url || token.picture || null,
+      role: isAdminEmail(profile.email) ? "admin" : profile.role,
+    } });
     response.cookies.set(FIREBASE_SESSION_COOKIE, sessionCookie, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

@@ -24,7 +24,7 @@ function mergeSummary(metric: Metric, sheetData: DashboardSheetData | null) {
 }
 
 function fetchMetricData(metricId: string, forceRefresh = false) {
-  const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v5" : "production-v3";
+  const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v5" : metricId === "munfik" ? "production-v4" : "production-v3";
   return Promise.all([
     fetchCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", forceRefresh),
     fetchCachedJson<MetricDetailData>(`metric-detail-${metricId}-${detailCacheVersion}`, `/api/metric-details/${metricId}`, forceRefresh),
@@ -44,7 +44,7 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
     : { href: "/", label: "Dashboard" };
   const fallback = metrics.find((metric) => metric.id === metricId)!;
   const cachedSheetData = getCachedJsonSnapshot<DashboardSheetData>("dashboard-sheet-production-v2");
-  const cachedDetail = getCachedJsonSnapshot<MetricDetailData>(`metric-detail-${metricId}-${metricId === "garis-kemiskinan" ? "production-v5" : "production-v3"}`);
+  const cachedDetail = getCachedJsonSnapshot<MetricDetailData>(`metric-detail-${metricId}-${metricId === "garis-kemiskinan" ? "production-v5" : metricId === "munfik" ? "production-v4" : "production-v3"}`);
   const [sheetData, setSheetData] = useState<DashboardSheetData | null>(cachedSheetData);
   const [detail, setDetail] = useState<MetricDetailData | null>(cachedDetail);
   const [query, setQuery] = useState("");
@@ -63,7 +63,7 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v5" : "production-v3";
+    const detailCacheVersion = metricId === "garis-kemiskinan" ? "production-v5" : metricId === "munfik" ? "production-v4" : "production-v3";
     const stopSummaryUpdates = subscribeCachedJson<DashboardSheetData>("dashboard-sheet-production-v2", "/api/dashboard", setSheetData);
     const stopDetailUpdates = subscribeCachedJson<MetricDetailData>(`metric-detail-${metricId}-${detailCacheVersion}`, `/api/metric-details/${metricId}`, setDetail);
     fetchMetricData(metricId).then(([summary, detailData]) => { if (!cancelled) { setSheetData(summary); setDetail(detailData); } })
@@ -72,8 +72,11 @@ function LiveMetricsDetailContent({ metricId }: { metricId: string }) {
     return () => { cancelled = true; stopSummaryUpdates(); stopDetailUpdates(); };
   }, [metricId]);
 
-  const metric = useMemo(() => mergeSummary(fallback, sheetData), [fallback, sheetData]);
-  const isSummaryAvailable = Boolean(sheetData?.metrics.some((item) => item.id === metricId));
+  const summaryMetric = useMemo(() => mergeSummary(fallback, sheetData), [fallback, sheetData]);
+  const munfikRecap = metricId === "munfik" ? detail?.datasets.find((dataset) => dataset.title === "Rekap Munfik per Bulan dan Sumber") : null;
+  const munfikGrandTotal = munfikRecap?.rows.find((row) => row[0] === "Grand Total");
+  const metric = munfikGrandTotal ? { ...summaryMetric, achievement: Number(munfikGrandTotal[4] ?? "0") || 0 } : summaryMetric;
+  const isSummaryAvailable = Boolean(sheetData?.metrics.some((item) => item.id === metricId) || munfikGrandTotal);
   const percent = isSummaryAvailable ? percentage(metric) : 0;
   const percentTone = achievementTone(percent);
   const year = sheetData?.year ?? 2026;

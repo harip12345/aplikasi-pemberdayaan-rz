@@ -78,8 +78,8 @@ export const AI_DATA_SOURCE_CATALOG: Record<AiDataSourceId, DataSourceDefinition
     spreadsheetId: "16D9SXhKszL-32AGafenp2VNfkMiex830QNGeL00Bpjs",
     gid: "1144245068",
     environment: { spreadsheetId: "GOOGLE_SHEETS_MUNFIK_ID", gid: "GOOGLE_SHEETS_MUNFIK_GID" },
-    parser: "munfik-three-horizontal-blocks-v1",
-    grain: "Satu baris Munfik per bulan dan sumber data",
+    parser: "munfik-two-detail-blocks-one-monthly-recap-v2",
+    grain: "Baris peserta Empowerment/Progdis dan Capaian bulanan Dakwah",
     refreshMode: "cached-google-sheet",
   },
   muzzaki: {

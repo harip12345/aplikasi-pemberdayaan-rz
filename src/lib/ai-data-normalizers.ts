@@ -130,7 +130,7 @@ export function normalizeMunfikData(data: MetricDetailData): NormalizedDataset<N
 
   const column = (name: string) => dataset.columns.findIndex((candidate) => candidate.toLocaleLowerCase("id-ID") === name.toLocaleLowerCase("id-ID"));
   const indexes = {
-    sourceRow: column("Baris Sumber"), month: column("Bulan"), source: column("Sumber"), name: column("Nama"), office: column("Cabang/Kantor"), city: column("Kab/Kota"), province: column("Provinsi"), program: column("Program"), nominal: column("Nominal"),
+    sourceRow: column("Baris Sumber"), month: column("Bulan"), source: column("Sumber"), name: column("Nama"), office: column("Cabang/Kantor"), city: column("Kab/Kota"), province: column("Provinsi"), program: column("Program"), nominal: column("Nominal"), count: column("Jumlah"),
   };
   const required = [indexes.month, indexes.source, indexes.name];
   if (required.some((index) => index < 0)) collector.add({ severity: "error", code: "REQUIRED_COLUMNS_MISSING", message: "Kolom Bulan, Sumber, atau Nama pada data Munfik tidak ditemukan." });
@@ -153,6 +153,7 @@ export function normalizeMunfikData(data: MetricDetailData): NormalizedDataset<N
       province: normalizeDataTerm(row[indexes.province] ?? ""),
       program: normalizeDataTerm(row[indexes.program] ?? ""),
       nominal: parseOptionalNumber(row[indexes.nominal] ?? ""),
+      count: indexes.count >= 0 ? Math.max(0, Math.trunc(Number(row[indexes.count] ?? "1") || 0)) : 1,
     }];
   });
 

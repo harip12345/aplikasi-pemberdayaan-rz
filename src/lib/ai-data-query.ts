@@ -205,18 +205,18 @@ export async function queryMunfikData(input: MunfikDataQuery, forceRefresh = fal
         : input.groupBy === "office" ? row.office
           : input.groupBy === "city" ? row.city
             : input.groupBy === "province" ? row.province : row.program;
-    if (key.trim()) groups.set(key, (groups.get(key) ?? 0) + 1);
+    if (key.trim()) groups.set(key, (groups.get(key) ?? 0) + row.count);
   });
   return {
     source: "munfik" as const,
     period: { ...selectedPeriod, startMonth: DASHBOARD_MONTHS[selectedPeriod.startMonthIndex], endMonth: DASHBOARD_MONTHS[selectedPeriod.endMonthIndex] },
     filters: { sourceType: input.sourceType, office: input.office, city: input.city, province: input.province, program: input.program },
     resolvedFilters: { office: input.office ? uniqueValues(records.map((row) => row.office)) : [], city: input.city ? uniqueValues(records.map((row) => row.city)) : [], province: input.province ? uniqueValues(records.map((row) => row.province)) : [], program: input.program ? uniqueValues(records.map((row) => row.program)) : [] },
-    total: records.length,
+    total: records.reduce((sum, row) => sum + row.count, 0),
     nominalAvailable: records.filter((row) => row.nominal !== null).length,
     nominalTotal: records.reduce((sum, row) => sum + (row.nominal ?? 0), 0),
     groups: input.groupBy ? sortedGroups(groups, input.limit) : [],
-    calculation: "COUNT seluruh baris valid dari blok Empowerment, Progdis, dan Dakwah setelah dinormalisasi; nama tidak dibuat unik dan nominal tidak digunakan sebagai capaian.",
+    calculation: "Empowerment dan Progdis dihitung per baris valid; Dakwah menggunakan SUM Capaian bulanan (bukan BNBA atau baris Total). Nama tidak dibuat unik dan nominal tidak digunakan sebagai capaian.",
     quality: dataset.quality,
     provenance: dataset.provenance,
   };
